@@ -35,7 +35,6 @@ local extrairNome          = IronSoulLib.extrairNome
 -- ══════════════════════════════════════════════════════
 local Window = Rayfield:CreateWindow({
     Name             = "Iron Soul",
-    Icon             = 0,
     LoadingTitle     = "Iron Soul: Dungeon [BETA]",
     LoadingSubtitle  = "by Noliar",
     ShowText         = "1.0",
