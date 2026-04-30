@@ -46,7 +46,7 @@ _G.KillAura_OffsetY     = _G.KillAura_OffsetY  or 4
 _G.KillAura_Noclip      = _G.KillAura_Noclip   ~= nil and _G.KillAura_Noclip or true
 _G.KillAura_Orbit       = _G.KillAura_Orbit or false  -- true = orbita | false = fica parado em cima
 _G.KillAura_OrbitRadius = _G.KillAura_OrbitRadius or 6      -- distância do centro do mob (studs)
-_G.KillAura_OrbitSpeed  = _G.KillAura_OrbitSpeed 2      -- velocidade da órbita (radianos/s)
+_G.KillAura_OrbitSpeed  = _G.KillAura_OrbitSpeed or 2      -- velocidade da órbita (radianos/s)
 
 -- Estado interno (leitura informativa para a UI)
 _G.RoundAtual       = 1
@@ -918,19 +918,3 @@ task.spawn(function()
         end
     end
 end)
-
-
-_G.AutoDungeonBot = true
-_G.AutoReplay = true
-
-_G.SkillsAtivas = {
-    Skill1 = true,
-    Skill2 = true,
-    SkillU = true,
-}
-
-_G.KillAura = true
-_G.KillAura_Mode = "fly"
-_G.KillAura_Priority = "closest"
-_G.KillAura_OffsetY = 8
-_G.KillAura_Noclip = true
