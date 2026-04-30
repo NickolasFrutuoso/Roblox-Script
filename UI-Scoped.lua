@@ -40,7 +40,7 @@ AimbotTab:CreateSection("General")
 
 AimbotTab:CreateParagraph({
     Title = "Silent Aimbot",
-    Content = "Automatically moves your mouse toward the nearest enemy. Only activates while holding Right Mouse Button (RMB)."
+    Content = "If it doesn't work, please check your ping or switch to a different server."
 })
 
 AimbotTab:CreateToggle({
