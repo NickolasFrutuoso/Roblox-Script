@@ -628,16 +628,21 @@ end
 -- ══════════════════════════════════════════════════════
 
 local Window = Rayfield:CreateWindow({
-    Name                   = "Slime Fun",
-    Icon                   = 0,
-    LoadingTitle           = "Slime Fun Hub",
-    LoadingSubtitle        = "Loading...",
-    Theme                  = "Default",
+    Name             = "Slime RNG | UPDT 04/30",
+    LoadingTitle     = "Slime RNG",
+    LoadingSubtitle  = "by Noliar",
+    ShowText         = "v1.0",
+    Theme            = "Default",
+    ToggleUIKeybind  = "L",
     DisableRayfieldPrompts = false,
     DisableBuildWarnings   = false,
-    ConfigurationSaving    = { Enabled = false },
-    Discord                = { Enabled = false },
-    KeySystem              = false,
+    ConfigurationSaving = {
+        Enabled    = true, 
+        FolderName = "SlimeRNG",
+        FileName   = "Noliar-HUB",
+    },
+    Discord   = { Enabled = false },
+    KeySystem = false,
 })
 
 -- ══════════════════════════════════════════════════════
