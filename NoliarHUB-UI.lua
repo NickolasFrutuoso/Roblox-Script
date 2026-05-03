@@ -2,17 +2,17 @@
 ╔══════════════════════════════════════════════════════════╗
 ║              ForgeLib — UI Library for Roblox            ║
 ║              Style: Seisen / Rayfield                    ║
-║              v2.2.0 — Major Fixes Release                ║
+║              v2.3.0 — Layout & Keybind Fix               ║
 ║                                                          ║
-║  FIXES v2.2:                                             ║
-║  • Botões: cores primary/success/danger/ghost corretas   ║
-║    texto e ícone não saem mais do layout                 ║
-║  • RichText=true com sanitização unicode em labels/info  ║
-║  • Keybind universal "..." ao lado de cada elemento      ║
-║  • Nome do jogo longo truncado com TextTruncate          ║
-║  • Minimizar → bolinha "N" arrastável no canto           ║
-║  • Notificações: fade out simples sem animação bugada    ║
-║  • Ícones e texto no CreateInfo/MakeLabel sem sobreposição║
+║  FIXES v2.3:                                             ║
+║  • Grid buttons: layout absoluto, texto/ícone sem vazar  ║
+║  • Keybind funcional em TODOS os elementos:              ║
+║    Toggle → liga/desliga, Button → executa callback      ║
+║    Slider → nenhuma ação (keybind visual apenas)         ║
+║  • Notificações: respeitam _NotifsEnabled corretamente   ║
+║  • Animação de fechar: slide lateral suave (sem resize)  ║
+║  • MakeBlock: padding absoluto, texto nunca vaza borda   ║
+║  • ButtonStyles.secondary.bg: Color3 resolvido           ║
 ╚══════════════════════════════════════════════════════════╝
 ]]
 
@@ -85,7 +85,7 @@ local Theme = {
     NavHover     = Color3.fromRGB(20, 20, 30),
 }
 
--- FIX #1: Cores corretas por estilo de botão
+-- ButtonStyles declarados após Theme para que referências a Theme sejam válidas
 local ButtonStyles = {
     primary   = {
         bg     = Color3.fromRGB(36, 24, 100),
@@ -106,16 +106,16 @@ local ButtonStyles = {
         hover  = Color3.fromRGB(76, 28, 28),
     },
     secondary = {
-        bg     = Theme.InputBg,
-        text   = Theme.TextSecondary,
-        border = Theme.Border,
-        hover  = Theme.Surface2,
+        bg     = Color3.fromRGB(20, 20, 28),  -- mesmo que Theme.InputBg mas sem referência tardia
+        text   = Color3.fromRGB(140, 140, 155),
+        border = Color3.fromRGB(36, 36, 48),
+        hover  = Color3.fromRGB(24, 24, 32),
     },
     ghost     = {
         bg     = Color3.fromRGB(16, 16, 22),
-        text   = Theme.TextMuted,
-        border = Theme.Border,
-        hover  = Theme.Surface,
+        text   = Color3.fromRGB(80, 80, 95),
+        border = Color3.fromRGB(36, 36, 48),
+        hover  = Color3.fromRGB(18, 18, 24),
     },
 }
 
@@ -298,8 +298,10 @@ local ForgeLib = {}
 ForgeLib.__index = ForgeLib
 ForgeLib.Icons = Icons
 
--- FIX #6: Notificação com fade simples (sem resize bugado)
+-- FIX v2.3: Notificação respeita _NotifsEnabled
 function ForgeLib:Notify(opts)
+    -- FIX: verificar flag ANTES de criar qualquer frame
+    if ForgeLib._NotifsEnabled == false then return end
     opts = opts or {}
     EnsureNotifHolder()
     local title    = opts.Title or "Aviso"
@@ -384,20 +386,23 @@ function ForgeLib:Notify(opts)
     }, progTrack)
     Corner(1, progFill)
 
-    -- FIX #6: Fade in simples
+    -- FIX v2.3: Fade in simples
     Tween(card, { BackgroundTransparency = 0 }, 0.2)
     Tween(bar,  { BackgroundTransparency = 0 }, 0.2)
     Tween(progFill, { Size = UDim2.new(0, 0, 1, 0) }, duration, Enum.EasingStyle.Linear)
 
-    -- FIX #6: Fade out simples — sem resize de altura, só transparência depois destrói
+    -- FIX v2.3: Animação de fechar = slide para a direita + fade, sem resize de altura
     task.delay(duration, function()
-        Tween(card, { BackgroundTransparency = 1 }, 0.25)
-        Tween(bar,  { BackgroundTransparency = 1 }, 0.25)
-        -- Encolhe wrapper silenciosamente após fade
-        task.wait(0.28)
-        Tween(wrapper, { Size = UDim2.new(1, 0, 0, 0) }, 0.18)
-        task.wait(0.2)
-        wrapper:Destroy()
+        if not wrapper or not wrapper.Parent then return end
+        -- Slide para a direita + fade simultâneo
+        Tween(wrapper, { Position = UDim2.new(1, 20, wrapper.Position.Y.Scale, wrapper.Position.Y.Offset) }, 0.28)
+        Tween(card, { BackgroundTransparency = 1 }, 0.22)
+        -- Após slide, encolhe altura silenciosamente para o layout ajustar
+        task.wait(0.3)
+        if not wrapper or not wrapper.Parent then return end
+        Tween(wrapper, { Size = UDim2.new(1, 0, 0, 0) }, 0.14)
+        task.wait(0.16)
+        if wrapper and wrapper.Parent then wrapper:Destroy() end
     end)
 end
 
@@ -1400,52 +1405,53 @@ function ForgeLib:CreateWindow(opts)
             table.insert(tabData.searchItems, { name=name, frame=frame })
         end
 
-        -- FIX #7: MakeBlock com ClipsDescendants=false para keybind não cortar
+        -- FIX v2.3: MakeBlock — padding absoluto, ClipsDescendants=false para keybind badge
+        -- Conteúdo interno começa em X=12 (PaddingLeft) e vai até width-12 (PaddingRight)
         local function MakeBlock(h, parent)
             local b = New("Frame", {
-                Size=UDim2.new(1,0,0,h or 38),
-                BackgroundColor3=Theme.Surface,
-                ClipsDescendants=false,
+                Size = UDim2.new(1, 0, 0, h or 38),
+                BackgroundColor3 = Theme.Surface,
+                ClipsDescendants = false,
             }, parent or TabFrame)
             Corner(10, b)
             Stroke(Theme.Border, 0.5, b)
-            Padding(0,0,12,12, b)
+            Padding(0, 0, 12, 12, b)
             return b
         end
 
-        -- FIX #7: MakeLabel — ícone à esquerda sem sobreposição
-        -- O texto começa DEPOIS do ícone com offset correto
-        local ICON_W = 22  -- largura reservada para ícone
+        -- FIX v2.3: MakeLabel com posições absolutas para garantir sem sobreposição
+        -- Layout: [ícone 18px][gap 4px][texto até 55% - offset]
+        -- Lado direito reservado para keybind (52px) + controle (toggle=46px, etc.)
+        local ICON_W = 22
 
         local function MakeLabel(parent, text, iconStr)
             local offset = iconStr and ICON_W or 0
             if iconStr and iconStr ~= "" then
                 New("TextLabel", {
-                    Size     = UDim2.new(0, ICON_W - 4, 1, 0),
-                    Position = UDim2.new(0, 0, 0, 0),
+                    Size               = UDim2.new(0, 18, 1, 0),
+                    Position           = UDim2.new(0, 0, 0, 0),
                     BackgroundTransparency = 1,
-                    Text     = iconStr,
-                    TextColor3 = Theme.Accent,
-                    TextSize = 13,
-                    Font     = Enum.Font.Gotham,
-                    RichText = false,
-                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Text               = iconStr,
+                    TextColor3         = Theme.Accent,
+                    TextSize           = 13,
+                    Font               = Enum.Font.Gotham,
+                    RichText           = false,
+                    TextXAlignment     = Enum.TextXAlignment.Left,
+                    TextYAlignment     = Enum.TextYAlignment.Center,
                 }, parent)
             end
-            -- Texto ocupa do offset até ~55% (deixa espaço para controle direito + keybind)
             return New("TextLabel", {
-                Size     = UDim2.new(0, 0, 1, 0),     -- será ajustado abaixo
-                Position = UDim2.new(0, offset, 0, 0),
+                -- Texto vai de offset até 56% da largura (deixa ~44% p/ controles)
+                Size               = UDim2.new(0.56, -offset, 1, 0),
+                Position           = UDim2.new(0, offset, 0, 0),
                 BackgroundTransparency = 1,
-                Text     = text,
-                Font     = Enum.Font.Gotham,
-                TextSize = 12,
-                TextColor3 = Theme.TextPrimary,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                TextTruncate = Enum.TextTruncate.AtEnd,
-                AutomaticSize = Enum.AutomaticSize.None,
-                -- ~55% da largura total menos o offset do ícone
-                Size = UDim2.new(0.55, -offset, 1, 0),
+                Text               = text,
+                Font               = Enum.Font.Gotham,
+                TextSize           = 12,
+                TextColor3         = Theme.TextPrimary,
+                TextXAlignment     = Enum.TextXAlignment.Left,
+                TextYAlignment     = Enum.TextYAlignment.Center,
+                TextTruncate       = Enum.TextTruncate.AtEnd,
             }, parent)
         end
 
