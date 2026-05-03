@@ -2,57 +2,19 @@
 ╔══════════════════════════════════════════════════════════╗
 ║              ForgeLib — UI Library for Roblox            ║
 ║              Style: Seisen / Rayfield                    ║
-║              v2.0.0 — Major Update                       ║
+║              v2.1.0 — Bugfix Release                     ║
 ║                                                          ║
-║  NOVIDADES v2:                                           ║
-║  • Sombra acompanha drag e some com Alt                  ║
-║  • Bordas arredondadas corrigidas                        ║
-║  • Nome do jogo ao lado da versão                        ║
-║  • Tabs no Main ou Settings: seção "main"/"settings"     ║
-║  • Menu lateral moderno com ícones e highlight           ║
-║  • Botões com hotkey (Keybind no CreateButton)           ║
-║  • Layout em grid 2-colunas dentro das tabs              ║
-║  • Busca global: menus + funções dentro dos tabs         ║
-║  • Sistema de ícones embutido (Phosphor-style Unicode)   ║
-║                                                          ║
-║  USO BÁSICO:                                             ║
-║                                                          ║
-║  local ForgeLib = loadstring(game:HttpGet("URL"))()      ║
-║                                                          ║
-║  local Window = ForgeLib:CreateWindow({                  ║
-║      Title    = "NOLIAR HUB",                            ║
-║      Subtitle = "v2.0.0",                                ║
-║      GameName = "Blox Fruits",                           ║
-║      ToggleKey = Enum.KeyCode.LeftAlt,                   ║
-║  })                                                      ║
-║                                                          ║
-║  -- Aba no Main (padrão)                                 ║
-║  local Tab = Window:CreateTab("Lobby")                   ║
-║                                                          ║
-║  -- Aba no Settings                                      ║
-║  local Tab2 = Window:CreateTab("Keybinds",               ║
-║      { Section = "settings" })                           ║
-║                                                          ║
-║  -- Ícones: use Icons.NOME ou string unicode             ║
-║  Tab:CreateToggle({                                      ║
-║      Name = "Auto Farm", Icon = "⚡",                    ║
-║      Default = false, Keybind = "F",                     ║
-║      Callback = function(v) print(v) end,                ║
-║  })                                                      ║
-║                                                          ║
-║  -- Layout em grid 2-colunas:                            ║
-║  Tab:CreateGrid(function(col1, col2)                     ║
-║      col1:CreateToggle({ Name = "ESP" })                 ║
-║      col2:CreateToggle({ Name = "Aimbot" })              ║
-║  end)                                                    ║
-║                                                          ║
-║  -- Botão com hotkey:                                    ║
-║  Tab:CreateButton({                                      ║
-║      Name = "Execute", Icon = "▶",                       ║
-║      Style = "primary",                                  ║
-║      Keybind = Enum.KeyCode.F5,                          ║
-║      Callback = function() ... end,                      ║
-║  })                                                      ║
+║  FIXES v2.1:                                             ║
+║  • CreateInfo: RichText desativado para evitar quebra    ║
+║    com ícones unicode; ícone "ℹ" renderizado separado    ║
+║  • MakeLabel: offset de ícone corrigido (não sobrepõe)   ║
+║  • Dropdown: container.Size resetado corretamente        ║
+║    ao recolher; ClipsDescendants garante sem vazamento   ║
+║  • Keybind inline clicável em Toggle, Slider, Dropdown   ║
+║    e Input (pressione para redefinir tecla)              ║
+║  • Settings: Sons de Alerta removido                     ║
+║  • Settings: UI Scale funcional via PlayerGui.LocalScale ║
+║  • Settings: botões de config com ícones e estilo melhor ║
 ╚══════════════════════════════════════════════════════════╝
 ]]
 
@@ -69,79 +31,35 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
 
 -- ============================================================
--- ÍCONES — sistema embutido (Unicode + Phosphor-style)
+-- ÍCONES
 -- ============================================================
--- Use ForgeLib.Icons.NOME nos seus componentes
--- Você pode usar qualquer string unicode como ícone também
 local Icons = {
-    -- Ações
-    Play       = "▶",
-    Pause      = "⏸",
-    Stop       = "⏹",
-    Refresh    = "↺",
-    Search     = "⌕",
-    Settings   = "⚙",
-    Close      = "✕",
-    Check      = "✓",
-    Plus       = "+",
-    Minus      = "−",
-    Edit       = "✎",
-    Delete     = "🗑",
-    Copy       = "⎘",
-    Download   = "↓",
-    Upload     = "↑",
-    Link       = "⛓",
-    Star       = "★",
-    Heart      = "♥",
-    Flag       = "⚑",
-    Lock       = "🔒",
-    Unlock     = "🔓",
-    Eye        = "👁",
-    EyeOff     = "🙈",
-    -- Categorias
-    Sword      = "⚔",
-    Shield     = "🛡",
-    Farm       = "🌾",
-    Speed      = "⚡",
-    Aim        = "🎯",
-    Map        = "🗺",
-    Bag        = "🎒",
-    Gem        = "💎",
-    Fire       = "🔥",
-    Ghost      = "👻",
-    Robot      = "🤖",
-    Skull      = "💀",
-    Crown      = "👑",
-    Key        = "🔑",
-    -- UI
-    Arrow      = "→",
-    ArrowLeft  = "←",
-    ArrowUp    = "↑",
-    ArrowDown  = "↓",
-    Chevron    = "›",
-    ChevronDown= "▾",
-    Dot        = "•",
-    Circle     = "○",
-    CircleFill = "●",
-    Square     = "□",
-    SquareFill = "■",
-    Diamond    = "◆",
+    Play       = "▶",  Pause      = "⏸",  Stop       = "⏹",
+    Refresh    = "↺",  Search     = "⌕",  Settings   = "⚙",
+    Close      = "✕",  Check      = "✓",  Plus       = "+",
+    Minus      = "−",  Edit       = "✎",  Delete     = "🗑",
+    Copy       = "⎘",  Download   = "↓",  Upload     = "↑",
+    Link       = "⛓",  Star       = "★",  Heart      = "♥",
+    Flag       = "⚑",  Lock       = "🔒", Unlock     = "🔓",
+    Eye        = "👁",  EyeOff     = "🙈",
+    Sword      = "⚔",  Shield     = "🛡", Farm       = "🌾",
+    Speed      = "⚡",  Aim        = "🎯", Map        = "🗺",
+    Bag        = "🎒",  Gem        = "💎", Fire       = "🔥",
+    Ghost      = "👻",  Robot      = "🤖", Skull      = "💀",
+    Crown      = "👑",  Key        = "🔑",
+    Arrow      = "→",  ArrowLeft  = "←",  ArrowUp    = "↑",
+    ArrowDown  = "↓",  Chevron    = "›",  ChevronDown= "▾",
+    Dot        = "•",  Circle     = "○",  CircleFill = "●",
+    Square     = "□",  SquareFill = "■",  Diamond    = "◆",
     Triangle   = "▲",
-    -- Notificações
-    Info       = "ℹ",
-    Warning    = "⚠",
-    Error      = "✖",
-    Success    = "✔",
-    Bell       = "🔔",
-    BellOff    = "🔕",
-    -- Pessoas
-    User       = "👤",
-    Users      = "👥",
-    Person     = "🧑",
+    Info       = "i",  -- FIX #1: evitar unicode complexo em labels normais
+    Warning    = "!",  Error      = "x",  Success    = "ok",
+    Bell       = "🔔",  BellOff    = "🔕",
+    User       = "👤",  Users      = "👥", Person     = "🧑",
 }
 
 -- ============================================================
--- TEMA (Dark / Seisen v2)
+-- TEMA
 -- ============================================================
 local Theme = {
     Background   = Color3.fromRGB(12, 12, 16),
@@ -169,17 +87,16 @@ local Theme = {
     NavHover     = Color3.fromRGB(20, 20, 30),
 }
 
--- Styles para botões
 local ButtonStyles = {
     primary   = { bg=Color3.fromRGB(36,24,100), text=Color3.fromRGB(167,139,250), border=Color3.fromRGB(80,60,180) },
     success   = { bg=Color3.fromRGB(16,64,36),  text=Color3.fromRGB(74,222,128),  border=Color3.fromRGB(34,140,70) },
     danger    = { bg=Color3.fromRGB(60,20,20),  text=Color3.fromRGB(248,113,113), border=Color3.fromRGB(160,40,40) },
     secondary = { bg=Theme.InputBg,             text=Theme.TextSecondary,         border=Theme.Border               },
-    ghost     = { bg=Color3.fromRGB(0,0,0,0),   text=Theme.TextMuted,             border=Theme.Border               },
+    ghost     = { bg=Color3.fromRGB(0,0,0),     text=Theme.TextMuted,             border=Theme.Border               },
 }
 
 -- ============================================================
--- UTILITÁRIOS INTERNOS
+-- UTILITÁRIOS
 -- ============================================================
 local function Tween(obj, props, t, style, dir)
     TweenService:Create(obj, TweenInfo.new(
@@ -203,12 +120,11 @@ local function Corner(r, p)
 end
 
 local function Stroke(color, thick, p, transp)
-    local s = New("UIStroke", {
+    return New("UIStroke", {
         Color = color or Theme.Border,
         Thickness = thick or 0.5,
         Transparency = transp or 0,
     }, p)
-    return s
 end
 
 local function Padding(t, b, l, r, p)
@@ -222,22 +138,13 @@ end
 
 local function List(spacing, p, dir)
     return New("UIListLayout", {
-        SortOrder         = Enum.SortOrder.LayoutOrder,
-        Padding           = UDim.new(0, spacing or 0),
-        FillDirection     = dir or Enum.FillDirection.Vertical,
+        SortOrder           = Enum.SortOrder.LayoutOrder,
+        Padding             = UDim.new(0, spacing or 0),
+        FillDirection       = dir or Enum.FillDirection.Vertical,
         HorizontalAlignment = Enum.HorizontalAlignment.Left,
     }, p)
 end
 
-local function Grid(cellX, cellY, paddX, paddY, p)
-    return New("UIGridLayout", {
-        CellSize    = UDim2.new(0.5, -(paddX or 5), 0, cellY or 36),
-        CellPadding = UDim2.new(0, paddX or 6, 0, paddY or 6),
-        SortOrder   = Enum.SortOrder.LayoutOrder,
-    }, p)
-end
-
--- Hover effect helper
 local function AddHover(btn, normalBg, hoverBg)
     btn.MouseEnter:Connect(function()
         Tween(btn, { BackgroundColor3 = hoverBg }, 0.1)
@@ -248,7 +155,66 @@ local function AddHover(btn, normalBg, hoverBg)
 end
 
 -- ============================================================
--- AVATAR DO PERSONAGEM
+-- FIX #4 HELPER: Keybind inline clicável universal
+-- Cria um badge de keybind no canto direito do bloco pai.
+-- Retorna função para registrar hotkey global.
+-- ============================================================
+local function MakeInlineKeybind(parent, defaultKey, onChanged)
+    -- defaultKey pode ser Enum.KeyCode ou nil
+    local key       = defaultKey
+    local listening = false
+
+    local kName = key and key.Name or "–"
+    local kBadge = New("TextButton", {
+        AnchorPoint    = Vector2.new(1, 0.5),
+        Position       = UDim2.new(1, 0, 0.5, 0),
+        Size           = UDim2.new(0, 42, 0, 20),
+        BackgroundColor3 = Theme.InputBg,
+        Text           = kName,
+        Font           = Enum.Font.GothamMedium,
+        TextSize       = 9,
+        TextColor3     = Theme.Accent,
+        AutoButtonColor = false,
+        ZIndex         = 5,
+    }, parent)
+    Corner(4, kBadge)
+    local kStroke = Stroke(Theme.Accent, 0.5, kBadge, 0.6)
+
+    -- Clique → modo escuta
+    kBadge.MouseButton1Click:Connect(function()
+        if listening then return end
+        listening = true
+        kBadge.Text = "..."
+        kBadge.TextColor3 = Theme.TextMuted
+        Tween(kBadge, { BackgroundColor3 = Theme.Surface2 }, 0.1)
+    end)
+
+    -- Captura próxima tecla
+    UserInputService.InputBegan:Connect(function(inp, gp)
+        if not listening or gp then return end
+        -- ESC cancela
+        if inp.KeyCode == Enum.KeyCode.Escape then
+            listening = false
+            kBadge.Text = key and key.Name or "–"
+            kBadge.TextColor3 = Theme.Accent
+            Tween(kBadge, { BackgroundColor3 = Theme.InputBg }, 0.1)
+            return
+        end
+        if inp.UserInputType == Enum.UserInputType.Keyboard then
+            listening = false
+            key = inp.KeyCode
+            kBadge.Text = key.Name
+            kBadge.TextColor3 = Theme.Accent
+            Tween(kBadge, { BackgroundColor3 = Theme.InputBg }, 0.1)
+            if onChanged then onChanged(key) end
+        end
+    end)
+
+    return kBadge, function() return key end
+end
+
+-- ============================================================
+-- AVATAR
 -- ============================================================
 local function GetAvatarThumb(userId)
     local ok, url = pcall(function()
@@ -299,6 +265,9 @@ local function EnsureNotifHolder()
     l.VerticalAlignment = Enum.VerticalAlignment.Bottom
 end
 
+-- ============================================================
+-- FORGELIB
+-- ============================================================
 local ForgeLib = {}
 ForgeLib.__index = ForgeLib
 ForgeLib.Icons = Icons
@@ -318,19 +287,16 @@ function ForgeLib:Notify(opts)
         BackgroundTransparency = 1,
     }, NotifHolder)
     Corner(10, card)
-    local stroke = Stroke(Theme.Border, 0.5, card)
+    Stroke(Theme.Border, 0.5, card)
     Padding(10, 10, 14, 14, card)
 
-    -- Barra lateral colorida
     local bar = New("Frame", {
         Size = UDim2.new(0, 3, 1, -20),
         Position = UDim2.new(0, -14, 0, 10),
-        BackgroundColor3 = color,
-        BorderSizePixel = 0,
+        BackgroundColor3 = color, BorderSizePixel = 0,
     }, card)
     Corner(2, bar)
 
-    -- Ícone
     local iconFrame = New("Frame", {
         Size = UDim2.new(0, 26, 0, 26),
         Position = UDim2.new(0, 0, 0.5, -13),
@@ -341,10 +307,12 @@ function ForgeLib:Notify(opts)
         ),
     }, card)
     Corner(8, iconFrame)
+    -- FIX #1: RichText = false nos ícones de notificação (unicode simples)
     New("TextLabel", {
         Size = UDim2.new(1,0,1,0), BackgroundTransparency=1,
         Text = icon, TextSize = 13,
         TextColor3 = color, Font = Enum.Font.Gotham,
+        RichText = false,
     }, iconFrame)
 
     New("TextLabel", {
@@ -352,6 +320,7 @@ function ForgeLib:Notify(opts)
         BackgroundTransparency = 1, Text = title,
         TextColor3 = Theme.TextPrimary, TextSize = 13,
         Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Left,
+        RichText = false,
     }, card)
     New("TextLabel", {
         Size = UDim2.new(1,-36,0,14), Position = UDim2.new(0,34,0,22),
@@ -359,9 +328,9 @@ function ForgeLib:Notify(opts)
         TextColor3 = Theme.TextMuted, TextSize = 11,
         Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd,
+        RichText = false,
     }, card)
 
-    -- Progress bar
     local progTrack = New("Frame", {
         AnchorPoint = Vector2.new(0,1), Position = UDim2.new(0,0,1,0),
         Size = UDim2.new(1,0,0,2), BackgroundColor3 = Theme.Border,
@@ -372,7 +341,6 @@ function ForgeLib:Notify(opts)
     }, progTrack)
 
     Tween(card, { BackgroundTransparency = 0 }, 0.22)
-    -- Animar progress bar
     Tween(progFill, { Size = UDim2.new(0,0,1,0) }, duration, Enum.EasingStyle.Linear)
 
     task.delay(duration, function()
@@ -388,76 +356,67 @@ end
 function ForgeLib:CreateWindow(opts)
     opts = opts or {}
     local titleText = opts.Title     or "FORGE HUB"
-    local subtitle  = opts.Subtitle  or "v2.0.0"
-    local gameName  = opts.GameName  or game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "Unknown Game"
+    local subtitle  = opts.Subtitle  or "v2.1.0"
+    local gameName  = opts.GameName  or (pcall(function()
+        return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
+    end) and game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "Unknown Game")
     local toggleKey = opts.ToggleKey or Enum.KeyCode.LeftAlt
     local width     = opts.Width     or 740
     local height    = opts.Height    or 490
 
-    -- ScreenGui principal
     local ScreenGui = New("ScreenGui", {
         Name = "ForgeLib_UI", ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         DisplayOrder = 10,
     }, PlayerGui)
 
-    -- ── Sombra (agora é filha do mesmo ScreenGui, não do frame)
-    --    Para acompanhar o drag, atualizamos a posição junto com Main
     local Shadow = New("Frame", {
         Name = "Shadow", AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.new(0.5, 3, 0.5, 4),
         Size = UDim2.new(0, width + 8, 0, height + 8),
         BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-        BackgroundTransparency = 0.5,
-        ZIndex = 1,
+        BackgroundTransparency = 0.5, ZIndex = 1,
     }, ScreenGui)
     Corner(14, Shadow)
 
-    -- Camada extra de sombra (mais suave)
     local Shadow2 = New("Frame", {
         Name = "Shadow2", AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.new(0.5, 5, 0.5, 7),
         Size = UDim2.new(0, width + 20, 0, height + 20),
         BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-        BackgroundTransparency = 0.78,
-        ZIndex = 0,
+        BackgroundTransparency = 0.78, ZIndex = 0,
     }, ScreenGui)
     Corner(16, Shadow2)
 
-    -- ── Janela principal
     local Main = New("Frame", {
         Name = "Main", AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.new(0.5, 0, 0.5, 0),
         Size = UDim2.new(0, width, 0, height),
         BackgroundColor3 = Theme.Background,
-        ClipsDescendants = true,
-        ZIndex = 2,
+        ClipsDescendants = true, ZIndex = 2,
     }, ScreenGui)
     Corner(12, Main)
     Stroke(Theme.Border, 1, Main)
 
-    -- Função para sincronizar sombras com Main
     local function SyncShadows()
         local px = Main.Position.X.Offset
         local py = Main.Position.Y.Offset
         local ps = Main.Position.X.Scale
         local psy= Main.Position.Y.Scale
-        Shadow.Position  = UDim2.new(ps, px+3, psy, py+4)
-        Shadow2.Position = UDim2.new(ps, px+5, psy, py+7)
+        Shadow.Position  = UDim2.new(ps, px+3,  psy, py+4)
+        Shadow2.Position = UDim2.new(ps, px+5,  psy, py+7)
     end
 
-    -- Função para sincronizar visibilidade
     local function SyncVisible(v)
-        Main.Visible   = v
-        Shadow.Visible = v
-        Shadow2.Visible= v
+        Main.Visible    = v
+        Shadow.Visible  = v
+        Shadow2.Visible = v
     end
 
     -- ── Topbar
     local Topbar = New("Frame", {
         Size = UDim2.new(1, 0, 0, 44),
-        BackgroundColor3 = Theme.Surface,
-        ZIndex = 3,
+        BackgroundColor3 = Theme.Surface, ZIndex = 3,
     }, Main)
     New("Frame", {
         AnchorPoint = Vector2.new(0,1), Position = UDim2.new(0,0,1,0),
@@ -465,50 +424,44 @@ function ForgeLib:CreateWindow(opts)
         BorderSizePixel = 0,
     }, Topbar)
 
-    -- Botões macOS decorativos
     local wbColors = {
-        { c=Color3.fromRGB(255,95,87),  h=Color3.fromRGB(220,60,50) },
+        { c=Color3.fromRGB(255,95,87),  h=Color3.fromRGB(220,60,50)  },
         { c=Color3.fromRGB(255,189,68), h=Color3.fromRGB(220,155,40) },
-        { c=Color3.fromRGB(40,200,64),  h=Color3.fromRGB(20,160,45) },
+        { c=Color3.fromRGB(40,200,64),  h=Color3.fromRGB(20,160,45)  },
     }
     for i, info in ipairs(wbColors) do
         local btn = New("Frame", {
             Size = UDim2.new(0,13,0,13),
             Position = UDim2.new(0, 12+(i-1)*20, 0.5, -6),
-            BackgroundColor3 = info.c,
-            ZIndex = 4,
+            BackgroundColor3 = info.c, ZIndex = 4,
         }, Topbar)
         Corner(7, btn)
-
         local hitbox = New("TextButton", {
             Size = UDim2.new(1,0,1,0), BackgroundTransparency = 1,
             Text = "", ZIndex = 5,
         }, btn)
-
         hitbox.MouseEnter:Connect(function() Tween(btn,{BackgroundColor3=info.h},0.08) end)
         hitbox.MouseLeave:Connect(function() Tween(btn,{BackgroundColor3=info.c},0.08) end)
-
-        if i == 1 then -- Fechar
+        if i == 1 then
             hitbox.MouseButton1Click:Connect(function()
                 Tween(Main, { Size = UDim2.new(0,0,0,0), Position = UDim2.new(0.5,0,0.5,0) }, 0.18)
-                Tween(Shadow, { BackgroundTransparency=1 }, 0.18)
-                Tween(Shadow2,{ BackgroundTransparency=1 }, 0.18)
+                Tween(Shadow,  { BackgroundTransparency=1 }, 0.18)
+                Tween(Shadow2, { BackgroundTransparency=1 }, 0.18)
                 task.wait(0.22)
                 ScreenGui:Destroy()
             end)
-        elseif i == 2 then -- Minimizar
+        elseif i == 2 then
             local minimized = false
             hitbox.MouseButton1Click:Connect(function()
                 minimized = not minimized
                 local targetH = minimized and 44 or height
-                Tween(Main, { Size = UDim2.new(0,width,0,targetH) }, 0.2)
-                Tween(Shadow, { Size = UDim2.new(0,width+8,0,targetH+8) }, 0.2)
-                Tween(Shadow2,{ Size = UDim2.new(0,width+20,0,targetH+20) }, 0.2)
+                Tween(Main,    { Size = UDim2.new(0,width,0,targetH)    }, 0.2)
+                Tween(Shadow,  { Size = UDim2.new(0,width+8,0,targetH+8) }, 0.2)
+                Tween(Shadow2, { Size = UDim2.new(0,width+20,0,targetH+20) }, 0.2)
             end)
         end
     end
 
-    -- Título (two-tone)
     local words = titleText:split(" ")
     local w1 = words[1] or titleText
     local w2 = words[2] or ""
@@ -524,22 +477,18 @@ function ForgeLib:CreateWindow(opts)
         ZIndex = 3,
     }, Topbar)
 
-    -- Separador topbar
     New("Frame", {
         AnchorPoint = Vector2.new(1,0.5),
         Position = UDim2.new(1,-170,0.5,0),
         Size = UDim2.new(0,1,0,20),
-        BackgroundColor3 = Theme.Border,
-        BorderSizePixel = 0,
+        BackgroundColor3 = Theme.Border, BorderSizePixel = 0,
     }, Topbar)
 
-    -- Nome do jogo (ao lado da versão)
-    local gameLabel = New("TextLabel", {
+    New("TextLabel", {
         AnchorPoint = Vector2.new(1,0.5),
         Position = UDim2.new(1,-18,0.5,0),
         Size = UDim2.new(0,148,0,24),
-        BackgroundTransparency = 1,
-        RichText = true,
+        BackgroundTransparency = 1, RichText = true,
         Text = string.format(
             '<font color="rgb(80,80,95)">%s</font>  <font color="rgb(100,90,200)">%s</font>',
             gameName, subtitle
@@ -549,7 +498,7 @@ function ForgeLib:CreateWindow(opts)
         ZIndex = 3,
     }, Topbar)
 
-    -- ── Arraste com sync de sombra
+    -- Drag
     local dragging, dragStart, startMainPos
     Topbar.InputBegan:Connect(function(inp)
         if inp.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -566,32 +515,29 @@ function ForgeLib:CreateWindow(opts)
     UserInputService.InputChanged:Connect(function(inp)
         if dragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
             local d = inp.Position - dragStart
-            local newPos = UDim2.new(
+            Main.Position = UDim2.new(
                 startMainPos.X.Scale, startMainPos.X.Offset + d.X,
                 startMainPos.Y.Scale, startMainPos.Y.Offset + d.Y
             )
-            Main.Position = newPos
-            SyncShadows() -- Sombra acompanha!
+            SyncShadows()
         end
     end)
 
-    -- ── Toggle visibilidade (sombra some junto)
+    -- Toggle
     UserInputService.InputBegan:Connect(function(inp, gp)
         if not gp and inp.KeyCode == toggleKey then
-            local v = not Main.Visible
-            SyncVisible(v)
+            SyncVisible(not Main.Visible)
         end
     end)
 
-    -- ── Resize (canto inferior direito)
+    -- Resize
     local ResizeHandle = New("TextButton", {
         Size = UDim2.new(0,18,0,18), AnchorPoint = Vector2.new(1,1),
         Position = UDim2.new(1,-1,1,-1), BackgroundTransparency = 1,
         Text = "", ZIndex = 10,
     }, Main)
-    -- Ícone resize
     New("TextLabel", {
-        Size = UDim2.new(1,0,1,0), BackgroundTransparency=1,
+        Size=UDim2.new(1,0,1,0), BackgroundTransparency=1,
         Text="⌟", TextSize=14, TextColor3=Theme.TextHint,
         Font=Enum.Font.Gotham, ZIndex=10,
     }, ResizeHandle)
@@ -610,18 +556,16 @@ function ForgeLib:CreateWindow(opts)
     UserInputService.InputChanged:Connect(function(inp)
         if resizing and inp.UserInputType == Enum.UserInputType.MouseMovement then
             local cur = UserInputService:GetMouseLocation()
-            local dx  = cur.X - resizeStart.X
-            local dy  = cur.Y - resizeStart.Y
-            local nw  = math.clamp(startSize.X + dx, 520, 1200)
-            local nh  = math.clamp(startSize.Y + dy, 360, 800)
-            Main.Size   = UDim2.new(0, nw, 0, nh)
+            local nw = math.clamp(startSize.X + (cur.X - resizeStart.X), 520, 1200)
+            local nh = math.clamp(startSize.Y + (cur.Y - resizeStart.Y), 360, 800)
+            Main.Size    = UDim2.new(0, nw, 0, nh)
             Shadow.Size  = UDim2.new(0, nw+8,  0, nh+8)
             Shadow2.Size = UDim2.new(0, nw+20, 0, nh+20)
             SyncShadows()
         end
     end)
 
-    -- ── Sidebar (agora mais larga e moderna)
+    -- ── Sidebar
     local Sidebar = New("Frame", {
         Name = "Sidebar", Position = UDim2.new(0,0,0,44),
         Size = UDim2.new(0,168,1,-44),
@@ -633,7 +577,6 @@ function ForgeLib:CreateWindow(opts)
         BorderSizePixel=0,
     }, Sidebar)
 
-    -- Search bar melhorada
     local SearchFrame = New("Frame", {
         Size = UDim2.new(1,-16,0,30), Position = UDim2.new(0,8,0,10),
         BackgroundColor3 = Theme.InputBg,
@@ -642,13 +585,14 @@ function ForgeLib:CreateWindow(opts)
     local searchStroke = Stroke(Theme.Border, 0.5, SearchFrame)
 
     New("TextLabel", {
-        Size = UDim2.new(0,18,1,0), Position = UDim2.new(0,8,0,0),
+        Size=UDim2.new(0,18,1,0), Position=UDim2.new(0,8,0,0),
         BackgroundTransparency=1, Text=Icons.Search,
         TextColor3=Theme.TextMuted, TextSize=14, Font=Enum.Font.Gotham,
+        RichText=false,
     }, SearchFrame)
 
     local SearchBox = New("TextBox", {
-        Size = UDim2.new(1,-28,1,0), Position = UDim2.new(0,26,0,0),
+        Size=UDim2.new(1,-28,1,0), Position=UDim2.new(0,26,0,0),
         BackgroundTransparency=1, PlaceholderText="Search...",
         PlaceholderColor3=Theme.TextHint,
         Text="", TextColor3=Theme.TextPrimary,
@@ -664,30 +608,22 @@ function ForgeLib:CreateWindow(opts)
         Tween(searchStroke, {Color=Theme.Border, Thickness=0.5}, 0.15)
     end)
 
-    -- Seções da nav: "main" e "settings"
-    local NavSections = {
-        main     = { label="MAIN",     btns={}, yStart=0 },
-        settings = { label="SETTINGS", btns={}, yStart=0 },
-    }
-
-    -- Container nav com scroll
     local NavScroll = New("ScrollingFrame", {
-        Position = UDim2.new(0,0,0,50), Size = UDim2.new(1,0,1,-100),
+        Position=UDim2.new(0,0,0,50), Size=UDim2.new(1,0,1,-100),
         BackgroundTransparency=1, ScrollBarThickness=0,
         CanvasSize=UDim2.new(0,0,0,0), AutomaticCanvasSize=Enum.AutomaticSize.Y,
         BorderSizePixel=0,
     }, Sidebar)
-    local NavLayout = List(0, NavScroll)
+    List(0, NavScroll)
 
-    -- Footer sidebar
+    -- Footer
     local SideFooter = New("Frame", {
         AnchorPoint=Vector2.new(0,1), Position=UDim2.new(0,0,1,0),
         Size=UDim2.new(1,0,0,58),
         BackgroundColor3=Theme.Surface,
     }, Sidebar)
     New("Frame", {
-        Size=UDim2.new(1,0,0,1), BackgroundColor3=Theme.Border,
-        BorderSizePixel=0,
+        Size=UDim2.new(1,0,0,1), BackgroundColor3=Theme.Border, BorderSizePixel=0,
     }, SideFooter)
     Padding(0,0,10,10, SideFooter)
 
@@ -722,52 +658,33 @@ function ForgeLib:CreateWindow(opts)
         TextColor3=Theme.TextMuted, TextXAlignment=Enum.TextXAlignment.Left,
     }, SideFooter)
 
-    -- ── Área de conteúdo
+    -- ── ContentArea
     local ContentArea = New("Frame", {
         Position=UDim2.new(0,168,0,44), Size=UDim2.new(1,-168,1,-44),
         BackgroundColor3=Theme.Background, ClipsDescendants=true,
     }, Main)
 
-    -- ── Dados globais das abas
-    local AllTabs    = {}    -- { frame, navBtn, name, section, searchItems }
-    local ActiveTab  = nil
-    local SearchResults = {} -- frames de resultado de busca global
+    local AllTabs   = {}
+    local ActiveTab = nil
 
-    -- Função para ativar aba com animação
     local function SetActiveTab(tabData)
         for _, td in pairs(AllTabs) do
             td.frame.Visible = false
-            -- Estilo nav inativo
-            Tween(td.navBtn, { BackgroundColor3=Color3.fromRGB(0,0,0), BackgroundTransparency=1 }, 0.12)
+            Tween(td.navBtn,   { BackgroundColor3=Color3.fromRGB(0,0,0), BackgroundTransparency=1 }, 0.12)
             Tween(td.navLabel, { TextColor3=Theme.TextMuted }, 0.12)
-            if td.navIcon then
-                Tween(td.navIcon, { TextColor3=Theme.TextMuted }, 0.12)
-            end
-            if td.accentBar then
-                td.accentBar.Visible = false
-            end
-            if td.activeBg then
-                td.activeBg.Visible = false
-            end
+            if td.navIcon then Tween(td.navIcon, { TextColor3=Theme.TextMuted }, 0.12) end
+            if td.accentBar then td.accentBar.Visible = false end
+            if td.activeBg  then td.activeBg.Visible  = false end
         end
-
         tabData.frame.Visible = true
-        -- Estilo nav ativo
-        Tween(tabData.navBtn, { BackgroundColor3=Theme.NavActive, BackgroundTransparency=0 }, 0.15)
+        Tween(tabData.navBtn,   { BackgroundColor3=Theme.NavActive, BackgroundTransparency=0 }, 0.15)
         Tween(tabData.navLabel, { TextColor3=Theme.TextPrimary }, 0.15)
-        if tabData.navIcon then
-            Tween(tabData.navIcon, { TextColor3=Theme.Accent }, 0.15)
-        end
-        if tabData.accentBar then
-            tabData.accentBar.Visible = true
-        end
-        if tabData.activeBg then
-            tabData.activeBg.Visible = true
-        end
+        if tabData.navIcon  then Tween(tabData.navIcon, { TextColor3=Theme.Accent }, 0.15) end
+        if tabData.accentBar then tabData.accentBar.Visible = true end
+        if tabData.activeBg  then tabData.activeBg.Visible  = true end
         ActiveTab = tabData
     end
 
-    -- ── Criar label de seção na nav
     local function MakeNavSectionLabel(text, layoutOrder)
         local lbl = New("TextLabel", {
             Size=UDim2.new(1,0,0,28), BackgroundTransparency=1,
@@ -780,44 +697,32 @@ function ForgeLib:CreateWindow(opts)
         return lbl
     end
 
-    -- ── Criar botão de nav moderno
     local function MakeNavBtn(tabName, icon, sectionName, layoutOrder)
         local btn = New("TextButton", {
-            Size = UDim2.new(1, 0, 0, 36),
-            BackgroundTransparency = 1,
-            BackgroundColor3 = Theme.NavActive,
-            Text = "", AutoButtonColor = false,
-            LayoutOrder = layoutOrder,
+            Size=UDim2.new(1,0,0,36), BackgroundTransparency=1,
+            BackgroundColor3=Theme.NavActive,
+            Text="", AutoButtonColor=false,
+            LayoutOrder=layoutOrder,
         }, NavScroll)
         Corner(8, btn)
-
-        -- Margem lateral
         New("UIPadding", {
-            PaddingLeft  = UDim.new(0,6),
-            PaddingRight = UDim.new(0,6),
-            PaddingTop   = UDim.new(0,2),
-            PaddingBottom= UDim.new(0,2),
+            PaddingLeft=UDim.new(0,6), PaddingRight=UDim.new(0,6),
+            PaddingTop=UDim.new(0,2),  PaddingBottom=UDim.new(0,2),
         }, btn)
 
-        -- Barra de accent (lado esquerdo)
         local accentBar = New("Frame", {
-            Size = UDim2.new(0,3,0.7,0), AnchorPoint=Vector2.new(0,0.5),
-            Position = UDim2.new(0,-6,0.5,0),
-            BackgroundColor3 = Theme.Accent,
-            Visible = false,
+            Size=UDim2.new(0,3,0.7,0), AnchorPoint=Vector2.new(0,0.5),
+            Position=UDim2.new(0,-6,0.5,0),
+            BackgroundColor3=Theme.Accent, Visible=false,
         }, btn)
         Corner(2, accentBar)
 
-        -- Background ativo (mais suave que o botão inteiro)
         local activeBg = New("Frame", {
-            Size = UDim2.new(1,0,1,0),
-            BackgroundColor3 = Theme.NavActive,
-            BackgroundTransparency = 0,
-            Visible = false,
+            Size=UDim2.new(1,0,1,0), BackgroundColor3=Theme.NavActive,
+            BackgroundTransparency=0, Visible=false,
         }, btn)
         Corner(8, activeBg)
 
-        -- Ícone
         local iconLbl = nil
         if icon and icon ~= "" then
             iconLbl = New("TextLabel", {
@@ -825,20 +730,19 @@ function ForgeLib:CreateWindow(opts)
                 BackgroundTransparency=1, Text=icon,
                 TextColor3=Theme.TextMuted, TextSize=14,
                 Font=Enum.Font.Gotham, ZIndex=3,
+                RichText=false,
             }, btn)
         end
 
-        -- Label
         local lbl = New("TextLabel", {
-            Size = UDim2.new(1,-(icon and 30 or 8),1,0),
-            Position = UDim2.new(0,icon and 28 or 8,0,0),
+            Size=UDim2.new(1,-(icon and 30 or 8),1,0),
+            Position=UDim2.new(0,icon and 28 or 8,0,0),
             BackgroundTransparency=1, Text=tabName,
             Font=Enum.Font.GothamMedium, TextSize=12,
             TextColor3=Theme.TextMuted, TextXAlignment=Enum.TextXAlignment.Left,
             ZIndex=3,
         }, btn)
 
-        -- Hover
         btn.MouseEnter:Connect(function()
             if not (ActiveTab and ActiveTab.navBtn == btn) then
                 Tween(btn, {BackgroundTransparency=0, BackgroundColor3=Theme.NavHover}, 0.1)
@@ -853,60 +757,44 @@ function ForgeLib:CreateWindow(opts)
         return btn, lbl, accentBar, activeBg, iconLbl
     end
 
-    -- ── Busca global: filtra abas E itens dentro delas
-    local AllSearchItems = {} -- { name, frame (dentro da tab), tabData }
-
+    -- Busca global
     SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
         local q = SearchBox.Text:lower():gsub("^%s+",""):gsub("%s+$","")
-
         if q == "" then
-            -- Restaura tudo
             for _, td in pairs(AllTabs) do
                 td.navBtn.Visible = true
-                -- Restaura items dentro do tab
                 for _, si in pairs(td.searchItems or {}) do
                     si.frame.Visible = true
                 end
             end
-            -- Restaura labels de seção
             for _, c in pairs(NavScroll:GetChildren()) do
                 if c:IsA("TextLabel") then c.Visible = true end
             end
             return
         end
-
-        -- Filtra nav buttons
         local anyTabMatch = false
         for _, td in pairs(AllTabs) do
-            local tabMatch = td.name:lower():find(q, 1, true) ~= nil
+            local tabMatch  = td.name:lower():find(q, 1, true) ~= nil
             local itemMatch = false
             for _, si in pairs(td.searchItems or {}) do
                 local match = si.name:lower():find(q, 1, true) ~= nil
                 si.frame.Visible = match
                 if match then itemMatch = true end
             end
-            -- Mostra aba se o nome bate OU se tem items que batem
             td.navBtn.Visible = tabMatch or itemMatch
             if tabMatch or itemMatch then anyTabMatch = true end
         end
-
-        -- Esconde section labels se necessário
         for _, c in pairs(NavScroll:GetChildren()) do
-            if c:IsA("TextLabel") then
-                c.Visible = anyTabMatch
-            end
+            if c:IsA("TextLabel") then c.Visible = anyTabMatch end
         end
     end)
 
     -- ============================================================
-    -- ABA DE SETTINGS (fixa, seção "settings")
+    -- SETTINGS TAB (fixa)
     -- ============================================================
     local function BuildSettingsTab()
         local navLO = 900
-
-        -- Garante label da seção settings
         MakeNavSectionLabel("SETTINGS", navLO - 1)
-
         local navBtn, navLbl, accentBar, activeBg, navIcon = MakeNavBtn(
             "Settings", Icons.Settings, "settings", navLO
         )
@@ -927,12 +815,9 @@ function ForgeLib:CreateWindow(opts)
             name="Settings", section="settings", searchItems={},
         }
         table.insert(AllTabs, tabData)
+        navBtn.MouseButton1Click:Connect(function() SetActiveTab(tabData) end)
 
-        navBtn.MouseButton1Click:Connect(function()
-            SetActiveTab(tabData)
-        end)
-
-        -- ────── Helpers locais de settings ──────
+        -- Helpers locais
         local function SecTitle(txt)
             local f = New("Frame", { Size=UDim2.new(1,0,0,26), BackgroundTransparency=1 }, TabFrame)
             New("TextLabel", {
@@ -973,7 +858,7 @@ function ForgeLib:CreateWindow(opts)
 
         local function SToggle(parent, label, default, cb)
             local state = default or false
-            local row = SRow(parent, label)
+            local row   = SRow(parent, label)
             local track = New("Frame", {
                 AnchorPoint=Vector2.new(1,0.5), Position=UDim2.new(1,0,0.5,0),
                 Size=UDim2.new(0,40,0,22),
@@ -991,25 +876,29 @@ function ForgeLib:CreateWindow(opts)
             }, row)
             hitbox.MouseButton1Click:Connect(function()
                 state = not state
-                Tween(track,{BackgroundColor3=state and Theme.AccentGreen or Theme.ToggleOff})
-                Tween(knob,{Position=UDim2.new(0,state and 20 or 3,0.5,-7)})
+                Tween(track, {BackgroundColor3=state and Theme.AccentGreen or Theme.ToggleOff})
+                Tween(knob,  {Position=UDim2.new(0,state and 20 or 3,0.5,-7)})
                 if cb then cb(state) end
             end)
         end
 
-        local function FlatBtn(parent, label, icon, cb)
+        -- FIX #5: botão de config melhorado com ícone + cores semânticas
+        local function FlatBtn(parent, label, icon, cb, style)
+            local sty = ButtonStyles[style or "secondary"] or ButtonStyles.secondary
             local btn = New("TextButton", {
-                Size=UDim2.new(1,0,0,34),
-                BackgroundColor3=Theme.Surface2,
+                Size=UDim2.new(1,0,0,36),
+                BackgroundColor3=sty.bg,
                 Text="", AutoButtonColor=false,
             }, parent)
             Corner(8, btn)
-            Stroke(Theme.Border, 0.5, btn)
+            Stroke(sty.border, 0.5, btn)
+
             if icon then
                 New("TextLabel", {
                     Size=UDim2.new(0,24,1,0), Position=UDim2.new(0,10,0,0),
                     BackgroundTransparency=1, Text=icon,
-                    TextColor3=Theme.TextMuted, TextSize=13, Font=Enum.Font.Gotham,
+                    TextColor3=sty.text, TextSize=13, Font=Enum.Font.Gotham,
+                    RichText=false,
                 }, btn)
             end
             New("TextLabel", {
@@ -1017,9 +906,15 @@ function ForgeLib:CreateWindow(opts)
                 Position=UDim2.new(0,icon and 34 or 14,0,0),
                 BackgroundTransparency=1, Text=label,
                 Font=Enum.Font.GothamMedium, TextSize=12,
-                TextColor3=Theme.TextSecondary, TextXAlignment=Enum.TextXAlignment.Left,
+                TextColor3=sty.text, TextXAlignment=Enum.TextXAlignment.Left,
             }, btn)
-            AddHover(btn, Theme.Surface2, Theme.Surface3)
+
+            local hoverBg = Color3.new(
+                math.min(sty.bg.R+0.04,1),
+                math.min(sty.bg.G+0.04,1),
+                math.min(sty.bg.B+0.04,1)
+            )
+            AddHover(btn, sty.bg, hoverBg)
             btn.MouseButton1Click:Connect(function()
                 Tween(btn,{BackgroundTransparency=0.4},0.06)
                 task.delay(0.12, function() Tween(btn,{BackgroundTransparency=0},0.1) end)
@@ -1030,10 +925,13 @@ function ForgeLib:CreateWindow(opts)
 
         -- ── Interface
         SecTitle("Interface")
-        local uiCard = Card(136)
+        local uiCard = Card(94)
         List(0, uiCard)
 
-        -- UI Scale slider (dentro do card)
+        -- FIX #5: UI Scale funcional via PlayerGui.CurrentCamera / UIScale
+        -- Usa UIScale no ScreenGui para escalar toda a UI
+        local uiScale = New("UIScale", { Scale = 1 }, ScreenGui)
+
         local scaleRow = New("Frame", { Size=UDim2.new(1,0,0,56), BackgroundTransparency=1 }, uiCard)
         New("TextLabel", {
             Size=UDim2.new(0.6,0,0,18), BackgroundTransparency=1,
@@ -1048,13 +946,15 @@ function ForgeLib:CreateWindow(opts)
             TextSize=12, TextColor3=Theme.Accent,
             TextXAlignment=Enum.TextXAlignment.Right,
         }, scaleRow)
-        -- Slider track (com padding adequado pra não encostar na borda)
+
         local sTrackFrame = New("Frame", {
             Position=UDim2.new(0,0,0,30), Size=UDim2.new(1,-4,0,6),
             BackgroundColor3=Theme.ToggleOff,
         }, scaleRow)
         Corner(3, sTrackFrame)
-        local sFill = New("Frame", { Size=UDim2.new(0.5,0,1,0), BackgroundColor3=Theme.AccentGreen }, sTrackFrame)
+        local sFill = New("Frame", {
+            Size=UDim2.new(0.5,0,1,0), BackgroundColor3=Theme.AccentGreen,
+        }, sTrackFrame)
         Corner(3, sFill)
         local sThumb = New("Frame", {
             AnchorPoint=Vector2.new(0.5,0.5), Position=UDim2.new(0.5,0,0.5,0),
@@ -1066,27 +966,35 @@ function ForgeLib:CreateWindow(opts)
             Size=UDim2.new(1,0,5,0), Position=UDim2.new(0,0,-2,0),
             BackgroundTransparency=1, Text="", ZIndex=5,
         }, sTrackFrame)
+
         local sDragging = false
-        sDragBtn.MouseButton1Down:Connect(function() sDragging=true end)
+        sDragBtn.MouseButton1Down:Connect(function() sDragging = true end)
         UserInputService.InputEnded:Connect(function(i)
-            if i.UserInputType==Enum.UserInputType.MouseButton1 then sDragging=false end
+            if i.UserInputType == Enum.UserInputType.MouseButton1 then sDragging = false end
         end)
         UserInputService.InputChanged:Connect(function(i)
-            if sDragging and i.UserInputType==Enum.UserInputType.MouseMovement then
-                local rel = math.clamp((i.Position.X - sTrackFrame.AbsolutePosition.X)/sTrackFrame.AbsoluteSize.X,0,1)
-                local val = math.floor(50 + (150-50)*rel)
-                sFill.Size=UDim2.new(rel,0,1,0)
-                sThumb.Position=UDim2.new(rel,0,0.5,0)
-                scaleValLbl.Text=val.."%"
+            if sDragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+                local rel = math.clamp(
+                    (i.Position.X - sTrackFrame.AbsolutePosition.X) / sTrackFrame.AbsoluteSize.X,
+                    0, 1
+                )
+                -- FIX #5: range 50%–150%, aplica UIScale de verdade
+                local pct = math.floor(50 + 100 * rel)
+                sFill.Size           = UDim2.new(rel, 0, 1, 0)
+                sThumb.Position      = UDim2.new(rel, 0, 0.5, 0)
+                scaleValLbl.Text     = pct .. "%"
+                uiScale.Scale        = pct / 100
             end
         end)
 
-        SToggle(uiCard, "Ativar Notificações", true, function(v) ForgeLib._NotifsEnabled=v end)
-        SToggle(uiCard, "Sons de Alerta",      false, function(v) ForgeLib._SoundsEnabled=v end)
-        uiCard.Size = UDim2.new(1,0,0, 56+34+34+14)
+        -- FIX #5: removido "Sons de Alerta"; mantido apenas Notificações
+        SToggle(uiCard, "Ativar Notificacoes", true, function(v)
+            ForgeLib._NotifsEnabled = v
+        end)
+        uiCard.Size = UDim2.new(1, 0, 0, 56 + 34 + 12)
 
         -- ── Configurações
-        SecTitle("Configurações")
+        SecTitle("Configuracoes")
 
         local cfgNameFrame = New("Frame", {
             Size=UDim2.new(1,0,0,32), BackgroundColor3=Theme.InputBg,
@@ -1108,16 +1016,17 @@ function ForgeLib:CreateWindow(opts)
         SToggle(cfgCard, "Account Exclusive", false)
         SToggle(cfgCard, "Account Autoload",  false)
 
+        -- FIX #5: Create Config com estilo primary
         FlatBtn(TabFrame, "Create Config", Icons.Plus, function()
             local name = cfgNameBox.Text
-            if name=="" then
-                ForgeLib:Notify({Title="Erro",Content="Digite um nome para a config.",Color=Theme.AccentRed,Icon=Icons.Error})
+            if name == "" then
+                ForgeLib:Notify({Title="Erro",Content="Digite um nome.",Color=Theme.AccentRed,Icon=Icons.Error})
                 return
             end
-            SaveConfig(name, {_name=name,_created=os.time()})
+            SaveConfig(name, {_name=name, _created=os.time()})
             ForgeLib:Notify({Title="Config criada",Content=name,Color=Theme.AccentGreen,Icon=Icons.Check})
-            cfgNameBox.Text=""
-        end)
+            cfgNameBox.Text = ""
+        end, "primary")
 
         SecTitle("Lista de Configs")
 
@@ -1170,53 +1079,70 @@ function ForgeLib:CreateWindow(opts)
                 }, ib)
                 AddHover(ib, name==cfgSelected and Theme.Surface2 or Theme.InputBg, Theme.Surface3)
                 ib.MouseButton1Click:Connect(function()
-                    cfgSelected=name; cfgDropLabel.Text=name
-                    cfgListFrame.Visible=false
+                    cfgSelected       = name
+                    cfgDropLabel.Text = name
+                    -- FIX #3: fechar lista e resetar tamanho corretamente
+                    cfgListFrame.Visible = false
+                    cfgListFrame.Size    = UDim2.new(1,0,0,0)
                 end)
             end
-            cfgListFrame.Size=UDim2.new(1,0,0,#configs*30)
+            local h = #configs * 30
+            cfgListFrame.Size = UDim2.new(1,0,0,h)
         end
+
         cfgDropBtn.MouseButton1Click:Connect(function()
-            cfgListFrame.Visible=not cfgListFrame.Visible
-            if cfgListFrame.Visible then RefreshCfgList() end
+            local open = not cfgListFrame.Visible
+            cfgListFrame.Visible = open
+            if open then
+                RefreshCfgList()
+            else
+                -- FIX #3: garantir reset do tamanho ao fechar
+                cfgListFrame.Size = UDim2.new(1,0,0,0)
+            end
         end)
 
-        local actionCard = Card(174)
+        -- FIX #5: botões de ação com estilos semânticos melhores
+        local actionCard = Card(168)
         List(6, actionCard)
-        FlatBtn(actionCard,"Load Config",     Icons.Download, function()
-            if cfgSelected=="nil" then ForgeLib:Notify({Title="Erro",Content="Selecione uma config.",Color=Theme.AccentRed,Icon=Icons.Error}); return end
+        FlatBtn(actionCard, "Load Config",      Icons.Download, function()
+            if cfgSelected == "nil" then
+                ForgeLib:Notify({Title="Erro",Content="Selecione uma config.",Color=Theme.AccentRed,Icon=Icons.Error})
+                return
+            end
             LoadConfig(cfgSelected)
             ForgeLib:Notify({Title="Config carregada",Content=cfgSelected,Icon=Icons.Check})
-        end)
-        FlatBtn(actionCard,"Overwrite Config",Icons.Edit, function()
-            if cfgSelected=="nil" then return end
-            SaveConfig(cfgSelected,{_name=cfgSelected,_updated=os.time()})
+        end, "success")
+        FlatBtn(actionCard, "Overwrite Config", Icons.Edit, function()
+            if cfgSelected == "nil" then return end
+            SaveConfig(cfgSelected, {_name=cfgSelected, _updated=os.time()})
             ForgeLib:Notify({Title="Config sobrescrita",Content=cfgSelected,Icon=Icons.Check})
-        end)
-        FlatBtn(actionCard,"Delete Config",   Icons.Delete, function()
-            if cfgSelected=="nil" then return end
-            ConfigStore[cfgSelected]=nil; cfgSelected="nil"; cfgDropLabel.Text="nil"
+        end, "secondary")
+        FlatBtn(actionCard, "Delete Config",    Icons.Delete, function()
+            if cfgSelected == "nil" then return end
+            ConfigStore[cfgSelected] = nil
+            cfgSelected = "nil"; cfgDropLabel.Text = "nil"
             ForgeLib:Notify({Title="Config deletada",Color=Theme.AccentRed,Icon=Icons.Error})
-        end)
-        FlatBtn(actionCard,"Refresh List",    Icons.Refresh, function()
-            RefreshCfgList()
+        end, "danger")
+        FlatBtn(actionCard, "Refresh List",     Icons.Refresh, function()
+            if cfgListFrame.Visible then RefreshCfgList() end
             ForgeLib:Notify({Title="Lista atualizada",Icon=Icons.Check})
-        end)
+        end, "ghost")
 
         local autoCard = Card(114)
         List(6, autoCard)
-        FlatBtn(autoCard,"Set as Normal Autoload",  Icons.Star, function()
-            ForgeLib._NormalAutoload=cfgSelected
+        FlatBtn(autoCard, "Set as Normal Autoload",  Icons.Star, function()
+            ForgeLib._NormalAutoload = cfgSelected
             ForgeLib:Notify({Title="Autoload definido",Content=cfgSelected,Icon=Icons.Star})
-        end)
-        FlatBtn(autoCard,"Set as Account Autoload", Icons.User, function()
-            ForgeLib._AccountAutoload=cfgSelected
+        end, "primary")
+        FlatBtn(autoCard, "Set as Account Autoload", Icons.User, function()
+            ForgeLib._AccountAutoload = cfgSelected
             ForgeLib:Notify({Title="Account Autoload",Content=cfgSelected,Icon=Icons.User})
-        end)
-        FlatBtn(autoCard,"Reset Autoloads",         Icons.Refresh, function()
-            ForgeLib._NormalAutoload=nil; ForgeLib._AccountAutoload=nil
+        end, "primary")
+        FlatBtn(autoCard, "Reset Autoloads", Icons.Refresh, function()
+            ForgeLib._NormalAutoload  = nil
+            ForgeLib._AccountAutoload = nil
             ForgeLib:Notify({Title="Autoloads resetados",Color=Theme.AccentRed,Icon=Icons.Error})
-        end)
+        end, "danger")
 
         local autoInfoLbl = New("TextLabel", {
             Size=UDim2.new(1,0,0,18), BackgroundTransparency=1,
@@ -1225,8 +1151,8 @@ function ForgeLib:CreateWindow(opts)
             TextXAlignment=Enum.TextXAlignment.Left,
         }, TabFrame)
         RunService.Heartbeat:Connect(function()
-            autoInfoLbl.Text=("Autoload: %s (%s)"):format(
-                ForgeLib._NormalAutoload or "none",
+            autoInfoLbl.Text = ("Autoload: %s (%s)"):format(
+                ForgeLib._NormalAutoload  or "none",
                 ForgeLib._AccountAutoload or "None"
             )
         end)
@@ -1235,22 +1161,18 @@ function ForgeLib:CreateWindow(opts)
     BuildSettingsTab()
 
     -- ══════════════════════════════════════════════════════
-    -- OBJETO WINDOW
+    -- WINDOW OBJECT
     -- ══════════════════════════════════════════════════════
-    local WindowObj = {}
-    local mainLabelAdded     = false
-    local sectionLabelAdded  = {}
-    local mainLabelOrder     = -100
-
-    -- Hotkeys de botões registrados globalmente
-    local ButtonHotkeys = {} -- { key=Enum.KeyCode, cb=function }
+    local WindowObj            = {}
+    local mainLabelAdded       = false
+    local sectionLabelAdded    = {}
+    local mainLabelOrder       = -100
+    local ButtonHotkeys        = {}
 
     UserInputService.InputBegan:Connect(function(inp, gp)
         if gp then return end
         for _, bh in pairs(ButtonHotkeys) do
-            if inp.KeyCode == bh.key then
-                pcall(bh.cb)
-            end
+            if inp.KeyCode == bh.key then pcall(bh.cb) end
         end
     end)
 
@@ -1259,16 +1181,12 @@ function ForgeLib:CreateWindow(opts)
         local section = (tabOpts.Section or "main"):lower()
         local icon    = tabOpts.Icon or ""
 
-        -- Adicionar label "MAIN" se ainda não foi
         if not mainLabelAdded and section == "main" then
             MakeNavSectionLabel("MAIN", mainLabelOrder)
             mainLabelAdded = true
         end
-
-        -- Label de seção customizada (caso seja diferente de main/settings)
         if section ~= "main" and section ~= "settings" and not sectionLabelAdded[section] then
-            local curOrder = #AllTabs * 10 + 50
-            MakeNavSectionLabel(section:upper(), curOrder - 1)
+            MakeNavSectionLabel(section:upper(), #AllTabs*10+50-1)
             sectionLabelAdded[section] = true
         end
 
@@ -1294,30 +1212,23 @@ function ForgeLib:CreateWindow(opts)
         }
         table.insert(AllTabs, tabData)
 
-        -- Primeira aba do main fica ativa por padrão
         local mainTabs = 0
         for _, td in pairs(AllTabs) do
             if td.section == "main" then mainTabs = mainTabs + 1 end
         end
-        if mainTabs == 1 and section == "main" then
-            SetActiveTab(tabData)
-        end
+        if mainTabs == 1 and section == "main" then SetActiveTab(tabData) end
 
-        navBtn.MouseButton1Click:Connect(function()
-            SetActiveTab(tabData)
-        end)
+        navBtn.MouseButton1Click:Connect(function() SetActiveTab(tabData) end)
 
         -- ─────────────────────────────────────────────────
-        -- OBJETO TAB
+        -- TAB OBJECT
         -- ─────────────────────────────────────────────────
         local TabObj = {}
 
-        -- Helper: registrar item no índice de busca
         local function RegisterSearch(name, frame)
             table.insert(tabData.searchItems, { name=name, frame=frame })
         end
 
-        -- Card base (bloco)
         local function MakeBlock(h, parent)
             local b = New("Frame", {
                 Size=UDim2.new(1,0,0,h or 38),
@@ -1329,20 +1240,33 @@ function ForgeLib:CreateWindow(opts)
             return b
         end
 
-        local function MakeLabel(parent, text, icon2)
-            if icon2 then
+        -- FIX #2: MakeLabel corrigido — ícone não sobrepõe o texto
+        -- Usa offset fixo e nunca usa posições sobrepostas
+        local function MakeLabel(parent, text, iconStr)
+            local iconOffset = iconStr and 22 or 0
+            if iconStr and iconStr ~= "" then
                 New("TextLabel", {
-                    Size=UDim2.new(0,20,1,0), Position=UDim2.new(0,0,0,0),
-                    BackgroundTransparency=1, Text=icon2,
-                    TextColor3=Theme.TextMuted, TextSize=14, Font=Enum.Font.Gotham,
+                    Size=UDim2.new(0,18,1,0),
+                    Position=UDim2.new(0,0,0,0),
+                    BackgroundTransparency=1,
+                    Text=iconStr,
+                    TextColor3=Theme.Accent,
+                    TextSize=13,
+                    Font=Enum.Font.Gotham,
+                    RichText=false,  -- FIX #1: nunca RichText em ícones unicode
                 }, parent)
             end
             return New("TextLabel", {
-                Size=UDim2.new(0.62,0,1,0),
-                Position=UDim2.new(0,icon2 and 22 or 0,0,0),
-                BackgroundTransparency=1, Text=text,
-                Font=Enum.Font.Gotham, TextSize=12,
-                TextColor3=Theme.TextPrimary, TextXAlignment=Enum.TextXAlignment.Left,
+                -- Ocupa do offset até ~60% da largura (deixa espaço para controle direito)
+                Size=UDim2.new(0.58, -iconOffset, 1, 0),
+                Position=UDim2.new(0, iconOffset, 0, 0),
+                BackgroundTransparency=1,
+                Text=text,
+                Font=Enum.Font.Gotham,
+                TextSize=12,
+                TextColor3=Theme.TextPrimary,
+                TextXAlignment=Enum.TextXAlignment.Left,
+                TextTruncate=Enum.TextTruncate.AtEnd,
             }, parent)
         end
 
@@ -1361,29 +1285,26 @@ function ForgeLib:CreateWindow(opts)
             }, sec)
         end
 
-        -- CreateGrid: layout em 2 colunas
-        -- Callback recebe (coluna1TabObj, coluna2TabObj)
+        -- CreateGrid
         function TabObj:CreateGrid(callback, cellHeight)
             local ch = cellHeight or 38
-            -- Container que usa UIGridLayout
             local gridContainer = New("Frame", {
-                Size=UDim2.new(1,0,0,10), -- será ajustado automaticamente
+                Size=UDim2.new(1,0,0,10),
                 BackgroundTransparency=1, AutomaticSize=Enum.AutomaticSize.Y,
             }, TabFrame)
 
-            local gl = New("UIGridLayout", {
+            New("UIGridLayout", {
                 CellSize=UDim2.new(0.5,-5,0,ch),
                 CellPadding=UDim2.new(0,8,0,8),
                 SortOrder=Enum.SortOrder.LayoutOrder,
             }, gridContainer)
 
-            -- Dois "TabObj proxy" que inserem dentro do gridContainer
             local function MakeColProxy()
                 local proxy = {}
 
                 local function MakeBlockInGrid(h)
                     local b = New("Frame", {
-                        Size=UDim2.new(0,1,0,h or ch), -- tamanho controlado pelo grid
+                        Size=UDim2.new(0,1,0,h or ch),
                         BackgroundColor3=Theme.Surface,
                     }, gridContainer)
                     Corner(10, b)
@@ -1392,7 +1313,6 @@ function ForgeLib:CreateWindow(opts)
                     return b
                 end
 
-                -- Toggle
                 function proxy:CreateToggle(opts2)
                     opts2 = opts2 or {}
                     local state = opts2.Default or false
@@ -1421,7 +1341,6 @@ function ForgeLib:CreateWindow(opts)
                     return { SetState=SetState, GetState=function() return state end }
                 end
 
-                -- Button
                 function proxy:CreateButton(opts2)
                     opts2 = opts2 or {}
                     local c = ButtonStyles[opts2.Style or "primary"] or ButtonStyles.primary
@@ -1437,6 +1356,7 @@ function ForgeLib:CreateWindow(opts)
                             Size=UDim2.new(0,22,1,0), Position=UDim2.new(0,6,0,0),
                             BackgroundTransparency=1, Text=opts2.Icon,
                             TextColor3=c.text, TextSize=14, Font=Enum.Font.Gotham,
+                            RichText=false,
                         }, btn)
                     end
                     New("TextLabel", {
@@ -1456,7 +1376,7 @@ function ForgeLib:CreateWindow(opts)
                     end
                     btn.MouseButton1Click:Connect(DoClick)
                     if opts2.Keybind then
-                        table.insert(ButtonHotkeys, {key=opts2.Keybind, cb=function() DoClick() end})
+                        table.insert(ButtonHotkeys, {key=opts2.Keybind, cb=DoClick})
                     end
                     RegisterSearch(opts2.Name or "Button", blk)
                     return { SetText=function(t)
@@ -1466,7 +1386,6 @@ function ForgeLib:CreateWindow(opts)
                     end }
                 end
 
-                -- Label
                 function proxy:CreateLabel(opts2)
                     opts2 = opts2 or {}
                     local blk = MakeBlockInGrid(ch)
@@ -1474,7 +1393,8 @@ function ForgeLib:CreateWindow(opts)
                         Size=UDim2.new(1,0,1,0), BackgroundTransparency=1,
                         Text=opts2.Text or "", Font=Enum.Font.Gotham, TextSize=12,
                         TextColor3=opts2.Color or Theme.TextMuted,
-                        TextXAlignment=Enum.TextXAlignment.Left, RichText=true,
+                        TextXAlignment=Enum.TextXAlignment.Left,
+                        RichText=false,
                     }, blk)
                 end
 
@@ -1484,34 +1404,47 @@ function ForgeLib:CreateWindow(opts)
             local col1 = MakeColProxy()
             local col2 = MakeColProxy()
             if callback then callback(col1, col2) end
-
-            -- Ajusta altura do container após populate
             task.defer(function()
                 local gl2 = gridContainer:FindFirstChildOfClass("UIGridLayout")
                 if gl2 then
                     gridContainer.Size = UDim2.new(1,0,0,gl2.AbsoluteContentSize.Y+4)
                 end
             end)
-
             return col1, col2
         end
 
-        -- CreateToggle
+        -- CreateToggle (com keybind inline clicável — FIX #4)
         function TabObj:CreateToggle(opts)
             opts = opts or {}
             local state = opts.Default or false
             local blk = MakeBlock(38)
             MakeLabel(blk, opts.Name or "Toggle", opts.Icon)
 
+            -- FIX #4: keybind inline clicável para redefinir
+            local kbKey = nil
             if opts.Keybind then
-                local kb = New("TextLabel", {
-                    AnchorPoint=Vector2.new(1,0.5), Position=UDim2.new(1,-44,0.5,0),
-                    Size=UDim2.new(0,36,0,18), BackgroundColor3=Theme.InputBg,
-                    Text=opts.Keybind, Font=Enum.Font.GothamMedium,
-                    TextSize=10, TextColor3=Theme.TextMuted,
-                }, blk)
-                Corner(5, kb)
-                Stroke(Theme.Border, 0.5, kb)
+                -- Aceita string legível OU Enum.KeyCode
+                if type(opts.Keybind) == "string" then
+                    -- string literal: só exibe, não é redefinível via enum
+                    local kb = New("TextLabel", {
+                        AnchorPoint=Vector2.new(1,0.5),
+                        Position=UDim2.new(1,-44,0.5,0),
+                        Size=UDim2.new(0,36,0,18),
+                        BackgroundColor3=Theme.InputBg,
+                        Text=opts.Keybind,
+                        Font=Enum.Font.GothamMedium,
+                        TextSize=9, TextColor3=Theme.TextMuted,
+                    }, blk)
+                    Corner(5, kb)
+                    Stroke(Theme.Border, 0.5, kb)
+                else
+                    -- Enum.KeyCode: usa MakeInlineKeybind para ser clicável
+                    MakeInlineKeybind(blk, opts.Keybind, function(newKey)
+                        kbKey = newKey
+                        if opts.KeybindCallback then opts.KeybindCallback(newKey) end
+                    end)
+                    kbKey = opts.Keybind
+                end
             end
 
             local track = New("Frame", {
@@ -1531,11 +1464,11 @@ function ForgeLib:CreateWindow(opts)
             }, blk)
 
             local function SetState(v)
-                state=v
+                state = v
                 Tween(track,{BackgroundColor3=v and Theme.AccentGreen or Theme.ToggleOff})
                 Tween(knob,{Position=UDim2.new(0,v and 20 or 3,0.5,-7)})
                 if opts.Callback then opts.Callback(v) end
-                if opts.Flag then _G["FL_"..opts.Flag]=v end
+                if opts.Flag then _G["FL_"..opts.Flag] = v end
             end
             hitbox.MouseButton1Click:Connect(function() SetState(not state) end)
 
@@ -1543,12 +1476,12 @@ function ForgeLib:CreateWindow(opts)
             return { SetState=SetState, GetState=function() return state end }
         end
 
-        -- CreateSlider
+        -- CreateSlider (com keybind inline — FIX #4)
         function TabObj:CreateSlider(opts)
             opts = opts or {}
-            local min = opts.Min or 0
-            local max = opts.Max or 100
-            local dec = opts.Decimals
+            local min     = opts.Min or 0
+            local max     = opts.Max or 100
+            local dec     = opts.Decimals
             local current = opts.Default or min
 
             local blk = MakeBlock(54)
@@ -1562,9 +1495,17 @@ function ForgeLib:CreateWindow(opts)
                 New("TextLabel", {
                     Position=UDim2.new(0,0,0,0), Size=UDim2.new(0,18,0,18),
                     BackgroundTransparency=1, Text=opts.Icon,
-                    TextColor3=Theme.TextMuted, TextSize=13, Font=Enum.Font.Gotham,
+                    TextColor3=Theme.Accent, TextSize=13, Font=Enum.Font.Gotham,
+                    RichText=false,
                 }, blk)
             end
+
+            -- FIX #4: keybind inline no slider
+            if opts.Keybind then
+                MakeInlineKeybind(blk, type(opts.Keybind)~="string" and opts.Keybind or nil,
+                    function(newKey) if opts.KeybindCallback then opts.KeybindCallback(newKey) end end)
+            end
+
             local valLbl = New("TextLabel", {
                 AnchorPoint=Vector2.new(1,0), Position=UDim2.new(1,0,0,0),
                 Size=UDim2.new(0,50,0,18), BackgroundTransparency=1,
@@ -1572,6 +1513,12 @@ function ForgeLib:CreateWindow(opts)
                 TextSize=12, TextColor3=Theme.Accent,
                 TextXAlignment=Enum.TextXAlignment.Right,
             }, blk)
+            -- Empurra o valLbl para não colidir com keybind
+            if opts.Keybind then
+                valLbl.Position = UDim2.new(1,-50,0,0)
+                valLbl.Size     = UDim2.new(0,44,0,18)
+            end
+
             local track = New("Frame", {
                 Position=UDim2.new(0,0,0,30), Size=UDim2.new(1,0,0,6),
                 BackgroundColor3=Theme.ToggleOff,
@@ -1599,13 +1546,13 @@ function ForgeLib:CreateWindow(opts)
                 local rel = math.clamp((inp.Position.X-track.AbsolutePosition.X)/track.AbsoluteSize.X,0,1)
                 local val = dec
                     and tonumber(("%."..(dec).."f"):format(min+(max-min)*rel))
-                    or math.floor(min+(max-min)*rel)
-                current=val
-                fill.Size=UDim2.new(rel,0,1,0)
-                thumb.Position=UDim2.new(rel,0,0.5,0)
-                valLbl.Text=tostring(val)
+                    or  math.floor(min+(max-min)*rel)
+                current = val
+                fill.Size       = UDim2.new(rel,0,1,0)
+                thumb.Position  = UDim2.new(rel,0,0.5,0)
+                valLbl.Text     = tostring(val)
                 if opts.Callback then opts.Callback(val) end
-                if opts.Flag then _G["FL_"..opts.Flag]=val end
+                if opts.Flag then _G["FL_"..opts.Flag] = val end
             end
             sliderBtn.MouseButton1Down:Connect(function() sdrag=true end)
             UserInputService.InputEnded:Connect(function(i)
@@ -1618,23 +1565,26 @@ function ForgeLib:CreateWindow(opts)
             local function SetValue(v)
                 current=v
                 local rel=math.clamp((v-min)/(max-min),0,1)
-                fill.Size=UDim2.new(rel,0,1,0)
-                thumb.Position=UDim2.new(rel,0,0.5,0)
-                valLbl.Text=tostring(v)
+                fill.Size      = UDim2.new(rel,0,1,0)
+                thumb.Position = UDim2.new(rel,0,0.5,0)
+                valLbl.Text    = tostring(v)
             end
             RegisterSearch(opts.Name or "Slider", blk)
             return { SetValue=SetValue, GetValue=function() return current end }
         end
 
-        -- CreateDropdown
+        -- CreateDropdown (FIX #3 + FIX #4)
         function TabObj:CreateDropdown(opts)
             opts = opts or {}
             local items    = opts.Items or {}
             local selected = opts.Default or (items[1] or "")
             local open     = false
 
+            -- Altura base do container (header + botão)
+            local BASE_H = 70
+
             local container = New("Frame", {
-                Size=UDim2.new(1,0,0,70), BackgroundTransparency=1,
+                Size=UDim2.new(1,0,0,BASE_H), BackgroundTransparency=1,
             }, TabFrame)
             List(4, container)
 
@@ -1644,7 +1594,8 @@ function ForgeLib:CreateWindow(opts)
             if opts.Icon then
                 New("TextLabel", {
                     Size=UDim2.new(0,20,1,0), BackgroundTransparency=1,
-                    Text=opts.Icon, TextColor3=Theme.TextMuted, TextSize=13, Font=Enum.Font.Gotham,
+                    Text=opts.Icon, TextColor3=Theme.Accent, TextSize=13,
+                    Font=Enum.Font.Gotham, RichText=false,
                 }, headerRow)
             end
             New("TextLabel", {
@@ -1654,6 +1605,12 @@ function ForgeLib:CreateWindow(opts)
                 Font=Enum.Font.Gotham, TextSize=12,
                 TextColor3=Theme.TextPrimary, TextXAlignment=Enum.TextXAlignment.Left,
             }, headerRow)
+
+            -- FIX #4: keybind inline no dropdown
+            if opts.Keybind then
+                MakeInlineKeybind(headerRow, type(opts.Keybind)~="string" and opts.Keybind or nil,
+                    function(newKey) if opts.KeybindCallback then opts.KeybindCallback(newKey) end end)
+            end
 
             local dropBtn = New("TextButton", {
                 Size=UDim2.new(1,0,0,32), BackgroundColor3=Theme.InputBg,
@@ -1668,7 +1625,7 @@ function ForgeLib:CreateWindow(opts)
                 Text=selected, Font=Enum.Font.Gotham, TextSize=12,
                 TextColor3=Theme.TextPrimary, TextXAlignment=Enum.TextXAlignment.Left,
             }, dropBtn)
-            New("TextLabel", {
+            local chevron = New("TextLabel", {
                 AnchorPoint=Vector2.new(1,0.5), Position=UDim2.new(1,-10,0.5,0),
                 Size=UDim2.new(0,14,0,14), BackgroundTransparency=1,
                 Text=Icons.ChevronDown, Font=Enum.Font.Gotham,
@@ -1676,19 +1633,32 @@ function ForgeLib:CreateWindow(opts)
             }, dropBtn)
             AddHover(dropBtn, Theme.InputBg, Theme.Surface2)
 
+            -- FIX #3: listFrame como filha do container, sem ClipsDescendants no container
+            -- O listFrame recolhe zerando sua própria Size + Visible=false
             local listFrame = New("Frame", {
-                Size=UDim2.new(1,0,0,0), BackgroundColor3=Theme.InputBg,
-                ClipsDescendants=true, Visible=false,
+                Size=UDim2.new(1,0,0,0),
+                BackgroundColor3=Theme.Surface2,
+                ClipsDescendants=true,
+                Visible=false,
             }, container)
             Corner(8, listFrame)
             Stroke(Theme.Border, 0.5, listFrame)
             List(0, listFrame)
 
+            local function CloseList()
+                open = false
+                Tween(listFrame, { Size=UDim2.new(1,0,0,0) }, 0.12)
+                task.delay(0.13, function() listFrame.Visible = false end)
+                -- FIX #3: resetar container para altura base
+                Tween(container, { Size=UDim2.new(1,0,0,BASE_H) }, 0.12)
+                Tween(chevron, { Rotation=0 }, 0.12)
+            end
+
             local function Build()
                 for _, item in ipairs(items) do
                     local ib = New("TextButton", {
                         Size=UDim2.new(1,0,0,30),
-                        BackgroundColor3=item==selected and Theme.Surface2 or Theme.InputBg,
+                        BackgroundColor3=item==selected and Theme.Surface3 or Theme.Surface2,
                         Text="", AutoButtonColor=false,
                     }, listFrame)
                     Padding(0,0,12,0, ib)
@@ -1698,32 +1668,42 @@ function ForgeLib:CreateWindow(opts)
                         TextColor3=item==selected and Theme.Accent or Theme.TextPrimary,
                         TextXAlignment=Enum.TextXAlignment.Left,
                     }, ib)
-                    AddHover(ib, item==selected and Theme.Surface2 or Theme.InputBg, Theme.Surface3)
+                    AddHover(ib,
+                        item==selected and Theme.Surface3 or Theme.Surface2,
+                        Theme.Surface3
+                    )
                     ib.MouseButton1Click:Connect(function()
-                        selected=item; selLbl.Text=item
-                        open=false; listFrame.Visible=false
-                        container.Size=UDim2.new(1,0,0,70)
+                        selected = item; selLbl.Text = item
+                        CloseList()
                         if opts.Callback then opts.Callback(item) end
-                        if opts.Flag then _G["FL_"..opts.Flag]=item end
+                        if opts.Flag then _G["FL_"..opts.Flag] = item end
+                        -- Rebuild para atualizar highlight
                         listFrame:ClearAllChildren(); List(0,listFrame); Build()
                     end)
                 end
-                local h=#items*30
-                listFrame.Size=UDim2.new(1,0,0,h)
-                container.Size=UDim2.new(1,0,0,70+h+4)
             end
 
             dropBtn.MouseButton1Click:Connect(function()
-                open=not open; listFrame.Visible=open
-                if open then listFrame:ClearAllChildren(); List(0,listFrame); Build()
-                else container.Size=UDim2.new(1,0,0,70) end
+                if open then
+                    CloseList()
+                else
+                    open = true
+                    listFrame:ClearAllChildren(); List(0,listFrame); Build()
+                    local h = math.min(#items * 30, 180) -- máx 180px
+                    listFrame.Size    = UDim2.new(1,0,0,0)
+                    listFrame.Visible = true
+                    Tween(listFrame, { Size=UDim2.new(1,0,0,h) }, 0.14)
+                    -- FIX #3: container cresce exatamente o necessário
+                    Tween(container, { Size=UDim2.new(1,0,0,BASE_H+h+4) }, 0.14)
+                    Tween(chevron, { Rotation=180 }, 0.14)
+                end
             end)
 
             RegisterSearch(opts.Name or "Dropdown", container)
             return {
-                GetSelected=function() return selected end,
-                SetItems=function(t)
-                    items=t; selected=t[1] or ""; selLbl.Text=selected
+                GetSelected = function() return selected end,
+                SetItems    = function(t)
+                    items = t; selected = t[1] or ""; selLbl.Text = selected
                     if open then listFrame:ClearAllChildren(); List(0,listFrame); Build() end
                 end,
             }
@@ -1747,6 +1727,7 @@ function ForgeLib:CreateWindow(opts)
                     Size=UDim2.new(0,24,1,0), Position=UDim2.new(0,6,0,0),
                     BackgroundTransparency=1, Text=opts.Icon,
                     TextColor3=c.text, TextSize=14, Font=Enum.Font.Gotham,
+                    RichText=false,
                 }, btn)
             end
             New("TextLabel", {
@@ -1757,7 +1738,7 @@ function ForgeLib:CreateWindow(opts)
                 TextColor3=c.text, TextXAlignment=Enum.TextXAlignment.Center,
             }, btn)
 
-            -- Keybind badge
+            -- FIX #4: keybind inline clicável no botão
             if opts.Keybind then
                 local kname = type(opts.Keybind)=="string" and opts.Keybind or opts.Keybind.Name
                 local kb = New("TextLabel", {
@@ -1767,6 +1748,20 @@ function ForgeLib:CreateWindow(opts)
                     TextSize=9, TextColor3=Theme.TextMuted,
                 }, btn)
                 Corner(4, kb)
+                -- Botão redefinível
+                if type(opts.Keybind) ~= "string" then
+                    MakeInlineKeybind(btn, opts.Keybind, function(newKey)
+                        kb.Text = newKey.Name
+                        -- Remove hotkey antigo e adiciona novo
+                        for i, bh in ipairs(ButtonHotkeys) do
+                            if bh._ref == btn then
+                                table.remove(ButtonHotkeys, i)
+                                break
+                            end
+                        end
+                        table.insert(ButtonHotkeys, {key=newKey, cb=function() pcall(opts.Callback) end, _ref=btn})
+                    end)
+                end
             end
 
             AddHover(btn, c.bg, Color3.new(
@@ -1780,24 +1775,23 @@ function ForgeLib:CreateWindow(opts)
             end
             btn.MouseButton1Click:Connect(DoClick)
 
-            -- Registrar hotkey global
-            if opts.Keybind and type(opts.Keybind)~="string" then
-                table.insert(ButtonHotkeys, {key=opts.Keybind, cb=DoClick})
+            if opts.Keybind and type(opts.Keybind) ~= "string" then
+                table.insert(ButtonHotkeys, {key=opts.Keybind, cb=DoClick, _ref=btn})
             end
 
             RegisterSearch(opts.Name or "Button", blk)
             return {
-                SetText=function(t)
+                SetText = function(t)
                     for _, child in pairs(btn:GetChildren()) do
                         if child:IsA("TextLabel") and child.TextXAlignment==Enum.TextXAlignment.Center then
-                            child.Text=t
+                            child.Text = t
                         end
                     end
                 end
             }
         end
 
-        -- CreateInput
+        -- CreateInput (FIX #4: keybind inline)
         function TabObj:CreateInput(opts)
             opts = opts or {}
             local cont = New("Frame", {
@@ -1809,7 +1803,8 @@ function ForgeLib:CreateWindow(opts)
             if opts.Icon then
                 New("TextLabel", {
                     Size=UDim2.new(0,18,1,0), BackgroundTransparency=1,
-                    Text=opts.Icon, TextColor3=Theme.TextMuted, TextSize=13, Font=Enum.Font.Gotham,
+                    Text=opts.Icon, TextColor3=Theme.Accent, TextSize=13,
+                    Font=Enum.Font.Gotham, RichText=false,
                 }, headerRow)
             end
             New("TextLabel", {
@@ -1819,6 +1814,12 @@ function ForgeLib:CreateWindow(opts)
                 Font=Enum.Font.Gotham, TextSize=12,
                 TextColor3=Theme.TextPrimary, TextXAlignment=Enum.TextXAlignment.Left,
             }, headerRow)
+
+            -- FIX #4: keybind inline no input
+            if opts.Keybind then
+                MakeInlineKeybind(headerRow, type(opts.Keybind)~="string" and opts.Keybind or nil,
+                    function(newKey) if opts.KeybindCallback then opts.KeybindCallback(newKey) end end)
+            end
 
             local inp = New("Frame", {
                 Size=UDim2.new(1,0,0,32), BackgroundColor3=Theme.InputBg,
@@ -1836,24 +1837,26 @@ function ForgeLib:CreateWindow(opts)
                 ClearTextOnFocus=false,
             }, inp)
 
-            tb.Focused:Connect(function() Tween(inpStroke,{Color=Theme.Accent,Thickness=1},0.15) end)
+            tb.Focused:Connect(function()
+                Tween(inpStroke,{Color=Theme.Accent,Thickness=1},0.15)
+            end)
             tb.FocusLost:Connect(function(enter)
                 Tween(inpStroke,{Color=Theme.Border,Thickness=0.5},0.15)
                 if enter and opts.Callback then opts.Callback(tb.Text) end
-                if opts.Flag then _G["FL_"..opts.Flag]=tb.Text end
+                if opts.Flag then _G["FL_"..opts.Flag] = tb.Text end
             end)
 
             RegisterSearch(opts.Name or "Input", cont)
             return {
-                GetValue=function() return tb.Text end,
-                SetValue=function(v) tb.Text=v end,
+                GetValue = function() return tb.Text end,
+                SetValue = function(v) tb.Text = v end,
             }
         end
 
-        -- CreateKeybind
+        -- CreateKeybind (já era clicável; agora usa MakeInlineKeybind unificado)
         function TabObj:CreateKeybind(opts)
             opts = opts or {}
-            local key = opts.Default or Enum.KeyCode.Unknown
+            local key      = opts.Default or Enum.KeyCode.Unknown
             local listening = false
             local blk = MakeBlock(38)
             MakeLabel(blk, opts.Name or "Keybind", opts.Icon)
@@ -1873,6 +1876,11 @@ function ForgeLib:CreateWindow(opts)
             end)
             UserInputService.InputBegan:Connect(function(inp, gp)
                 if listening and not gp then
+                    if inp.KeyCode == Enum.KeyCode.Escape then
+                        listening=false; kBtn.Text=key.Name; kBtn.TextColor3=Theme.Accent
+                        Tween(kBtn,{BackgroundColor3=Theme.InputBg},0.1)
+                        return
+                    end
                     listening=false; key=inp.KeyCode
                     kBtn.Text=key.Name; kBtn.TextColor3=Theme.Accent
                     Tween(kBtn,{BackgroundColor3=Theme.InputBg},0.1)
@@ -1888,44 +1896,77 @@ function ForgeLib:CreateWindow(opts)
         -- CreateLabel
         function TabObj:CreateLabel(opts)
             opts = opts or {}
-            local lbl = New("TextLabel", {
-                Size=UDim2.new(1,0,0,24), BackgroundTransparency=1,
-                Text=(opts.Icon and opts.Icon.." " or "")..(opts.Text or ""),
-                Font=Enum.Font.Gotham, TextSize=12,
-                TextColor3=opts.Color or Theme.TextMuted,
-                TextXAlignment=Enum.TextXAlignment.Left, RichText=true,
-            }, TabFrame)
-            RegisterSearch(opts.Text or "Label", lbl)
-            return { SetText=function(t) lbl.Text=t end }
+            -- FIX #1 / #2: ícone e texto separados, sem RichText
+            local lbl
+            if opts.Icon and opts.Icon ~= "" then
+                local row = New("Frame", {
+                    Size=UDim2.new(1,0,0,24), BackgroundTransparency=1,
+                }, TabFrame)
+                New("TextLabel", {
+                    Size=UDim2.new(0,18,1,0), BackgroundTransparency=1,
+                    Text=opts.Icon, TextColor3=Theme.Accent, TextSize=13,
+                    Font=Enum.Font.Gotham, RichText=false,
+                }, row)
+                lbl = New("TextLabel", {
+                    Size=UDim2.new(1,-22,1,0), Position=UDim2.new(0,22,0,0),
+                    BackgroundTransparency=1, Text=opts.Text or "",
+                    Font=Enum.Font.Gotham, TextSize=12,
+                    TextColor3=opts.Color or Theme.TextMuted,
+                    TextXAlignment=Enum.TextXAlignment.Left,
+                    RichText=false,
+                }, row)
+                RegisterSearch(opts.Text or "Label", row)
+                return { SetText=function(t) lbl.Text=t end }
+            else
+                lbl = New("TextLabel", {
+                    Size=UDim2.new(1,0,0,24), BackgroundTransparency=1,
+                    Text=opts.Text or "",
+                    Font=Enum.Font.Gotham, TextSize=12,
+                    TextColor3=opts.Color or Theme.TextMuted,
+                    TextXAlignment=Enum.TextXAlignment.Left,
+                    RichText=false,
+                }, TabFrame)
+                RegisterSearch(opts.Text or "Label", lbl)
+                return { SetText=function(t) lbl.Text=t end }
+            end
         end
 
-        -- CreateInfo
+        -- CreateInfo — FIX #1: RichText removido, ícone renderizado separado
         function TabObj:CreateInfo(opts)
             opts = opts or {}
             local lines = opts.Lines or {}
+
             local box = New("Frame", {
                 Size=UDim2.new(1,0,0,16+#lines*20),
                 BackgroundColor3=Theme.Surface,
             }, TabFrame)
             Corner(10, box)
             Stroke(Theme.Border, 0.5, box)
-            Padding(10,10,14,14, box)
+            Padding(10,10,14,28, box) -- padding direito maior para o ícone info
             List(2, box)
 
-            -- Ícone info no canto
-            New("TextLabel", {
-                AnchorPoint=Vector2.new(1,0), Position=UDim2.new(1,-12,0,10),
-                Size=UDim2.new(0,16,0,16), BackgroundTransparency=1,
-                Text=Icons.Info, TextColor3=Theme.Accent, TextSize=13,
-                Font=Enum.Font.Gotham,
+            -- FIX #1: ícone "i" sem unicode problemático, sem RichText
+            local iconBadge = New("Frame", {
+                AnchorPoint=Vector2.new(1,0), Position=UDim2.new(1,-8,0,8),
+                Size=UDim2.new(0,18,0,18),
+                BackgroundColor3=Theme.AccentDim,
             }, box)
+            Corner(9, iconBadge)
+            New("TextLabel", {
+                Size=UDim2.new(1,0,1,0), BackgroundTransparency=1,
+                Text="i", Font=Enum.Font.GothamBold, TextSize=11,
+                TextColor3=Theme.Accent,
+                TextXAlignment=Enum.TextXAlignment.Center,
+            }, iconBadge)
 
             for _, line in ipairs(lines) do
                 New("TextLabel", {
                     Size=UDim2.new(1,0,0,18), BackgroundTransparency=1,
+                    -- FIX #1: RichText = false para evitar quebra com unicode
                     Text=line, Font=Enum.Font.Gotham, TextSize=11,
                     TextColor3=Theme.TextSecondary,
-                    TextXAlignment=Enum.TextXAlignment.Left, RichText=true,
+                    TextXAlignment=Enum.TextXAlignment.Left,
+                    RichText=false,
                 }, box)
             end
         end
@@ -1933,17 +1974,9 @@ function ForgeLib:CreateWindow(opts)
         return TabObj
     end
 
-    function WindowObj:Notify(opts)
-        ForgeLib:Notify(opts)
-    end
-
-    function WindowObj:Destroy()
-        ScreenGui:Destroy()
-    end
-
-    function WindowObj:SetVisible(v)
-        SyncVisible(v)
-    end
+    function WindowObj:Notify(opts)  ForgeLib:Notify(opts) end
+    function WindowObj:Destroy()     ScreenGui:Destroy()   end
+    function WindowObj:SetVisible(v) SyncVisible(v)        end
 
     return WindowObj
 end
