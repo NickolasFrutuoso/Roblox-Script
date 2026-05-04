@@ -278,7 +278,7 @@ local HUB = MacLib:CreateHUB({
         }, "FarmRescan")
 
         FarmRight:SubLabel({
-            Text = "After scanning, wait a few seconds before selecting.",
+            Text = "After scanning, wait a few seconds.",
         })
 
         -- ============================================================
