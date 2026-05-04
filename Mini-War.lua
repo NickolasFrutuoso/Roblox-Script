@@ -3,32 +3,18 @@
 --       Collect + Sell + Buy em um único loop
 -- ============================================
 
--- ============================================
--- CONFIGURAÇÕES GLOBAIS (use para a UI)
--- ============================================
+-- Preserva valores da UI se já definidos, senão usa defaults
+_G.COLLECT       = (_G.COLLECT       ~= nil) and _G.COLLECT       or false
+_G.SELL          = (_G.SELL          ~= nil) and _G.SELL          or false
+_G.AUTO_BUY      = (_G.AUTO_BUY      ~= nil) and _G.AUTO_BUY      or false
+_G.DELAY_COLLECT = (_G.DELAY_COLLECT ~= nil) and _G.DELAY_COLLECT or 0.5
+_G.DELAY_SELL    = (_G.DELAY_SELL    ~= nil) and _G.DELAY_SELL    or 10
+_G.DELAY_BUY     = (_G.DELAY_BUY     ~= nil) and _G.DELAY_BUY     or 0.5
+_G.RESTOCK_WAIT  = (_G.RESTOCK_WAIT  ~= nil) and _G.RESTOCK_WAIT  or 120
+_G.RECURSOS      = (_G.RECURSOS      ~= nil) and _G.RECURSOS      or {}
 
--- [ COLLECT ]
-_G.COLLECT          = true
-_G.DELAY_COLLECT    = 0.1
-
--- [ SELL ]
-_G.SELL             = true
-_G.DELAY_SELL       = 6
-
--- [ BUY ]
-_G.AUTO_BUY         = true
-_G.DELAY_BUY        = 0.5
-_G.RESTOCK_WAIT     = 310
-
--- [ RECURSOS COLETÁVEIS ]
--- Preenchido automaticamente pelo scan do plot.
--- { [resourceName] = true/false }
--- true  = coleta | false = ignora
-_G.RECURSOS = {}
-
--- [ LISTA DE COMPRA ] true = compra, false = ignora
-_G.BUY_LIST = {
-    -- House
+-- Merge BUY_LIST: preserva o que a UI já definiu, garante que todas as keys existam
+local defaultBuyList = {
     ["SmallHouse"]          = false,
     ["FarmHouse"]           = false,
     ["House"]               = false,
@@ -40,7 +26,6 @@ _G.BUY_LIST = {
     ["TheManor"]            = false,
     ["Hotel"]               = false,
     ["Giant Skyscraper"]    = false,
-    -- Military
     ["BigHangar"]           = false,
     ["Hangar"]              = false,
     ["MissleLauncher"]      = false,
@@ -58,7 +43,6 @@ _G.BUY_LIST = {
     ["Artillery Depot"]     = false,
     ["Rocket Bunker"]       = false,
     ["MilitaryHospital"]    = false,
-    -- Decor
     ["Storage Center"]      = false,
     ["Worker Statue"]       = false,
     ["Soldier Statue"]      = false,
@@ -76,7 +60,6 @@ _G.BUY_LIST = {
     ["Fountain"]            = false,
     ["SalutingStatue"]      = false,
     ["Statue"]              = false,
-    -- Farm
     ["Bank"]                = false,
     ["CaveCoal"]            = false,
     ["CaveDiamond"]         = false,
@@ -97,43 +80,24 @@ _G.BUY_LIST = {
     ["Blackhole Generator"] = false,
 }
 
+-- Se a UI ainda não criou _G.BUY_LIST, usa o default completo
+-- Se já existe, faz merge: mantém o que a UI definiu e preenche o que falta
+if _G.BUY_LIST == nil then
+    _G.BUY_LIST = defaultBuyList
+else
+    for key, val in pairs(defaultBuyList) do
+        if _G.BUY_LIST[key] == nil then
+            _G.BUY_LIST[key] = val
+        end
+    end
+end
+
 -- ============================================
--- STATS GLOBAIS — leia na UI via _G.STATS
+-- STATS
 -- ============================================
---[[
-    _G.STATS = {
-        startTime  : number   tick() de quando o script iniciou
-        uptime     : number   segundos rodando (atualizado a cada ciclo)
-
-        collect = {
-            totalItems    : number              total de unidades coletadas (acumulado)
-            totalRuns     : number              quantas rodadas de coleta aconteceram
-            byResource    : { [name] = number } total por nome de recurso
-            lastRun       : number              tick() da última coleta
-            lastRunItems  : number              unidades coletadas na última rodada
-        },
-
-        sell = {
-            totalRuns : number   quantas vezes a venda disparou com sucesso
-            lastRun   : number   tick() da última venda
-        },
-
-        buy = {
-            totalItems    : number              total de unidades compradas (acumulado)
-            totalRuns     : number              quantas rodadas de compra aconteceram
-            byItem        : { [name] = number } total por nome de item
-            lastRun       : number              tick() da última compra
-            lastRunItems  : number              unidades compradas na última rodada
-        },
-    }
-
-    Para resetar: _G.RESET_STATS()
-]]
-
 _G.STATS = {
     startTime = tick(),
     uptime    = 0,
-
     collect = {
         totalItems   = 0,
         totalRuns    = 0,
@@ -141,12 +105,10 @@ _G.STATS = {
         lastRun      = 0,
         lastRunItems = 0,
     },
-
     sell = {
         totalRuns = 0,
         lastRun   = 0,
     },
-
     buy = {
         totalItems   = 0,
         totalRuns    = 0,
@@ -251,16 +213,15 @@ local function scanResources()
         end
     end
 
-    -- Remove recursos que saíram do plot
     for name in pairs(_G.RECURSOS) do
         if not found[name] then _G.RECURSOS[name] = nil end
     end
 
-    -- Adiciona novos (default: true)
+    -- Novos recursos entram como FALSE — usuário escolhe na UI
     local newCount = 0
     for name in pairs(found) do
         if _G.RECURSOS[name] == nil then
-            _G.RECURSOS[name] = true
+            _G.RECURSOS[name] = false
             newCount = newCount + 1
         end
     end
@@ -275,7 +236,6 @@ local function scanResources()
     return total > 0
 end
 
--- Expõe rescan manual para a UI
 _G.SCAN_RECURSOS = function()
     print("[SCAN] Rescaneando...")
     scanResources()
@@ -466,23 +426,31 @@ end
 
 -- ============================================
 -- SCAN INICIAL — aguarda o plot carregar
+-- Não faz scan automático, só aguarda o plot
+-- estar disponível para quando o usuário pedir
 -- ============================================
 print("[AUTO FARM] Aguardando plot...")
 
-local scanOk = false
+local plotReady = false
+local plotTimeout = 0
 repeat
     task.wait(2)
-    scanOk = scanResources()
-until scanOk
+    plotTimeout = plotTimeout + 2
+    plotReady = getPlayerPlot() ~= nil
+until plotReady or plotTimeout >= 60
 
-print("[AUTO FARM] Rodando! | COLLECT:" .. tostring(_G.COLLECT) .. " SELL:" .. tostring(_G.SELL) .. " BUY:" .. tostring(_G.AUTO_BUY))
+if plotReady then
+    print("[AUTO FARM] Plot encontrado! Use a UI para ativar as opções.")
+else
+    warn("[AUTO FARM] Plot não encontrado após 60s.")
+end
 
 -- ============================================
 -- LOOP PRINCIPAL
 -- ============================================
-local sellTimer  = 0
-local buyTimer   = _G.RESTOCK_WAIT
-local scanTimer  = 0
+local sellTimer     = 0
+local buyTimer      = _G.RESTOCK_WAIT
+local scanTimer     = 0
 local SCAN_INTERVAL = 300
 
 while true do
