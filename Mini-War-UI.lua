@@ -277,25 +277,8 @@ local HUB = MacLib:CreateHUB({
             end,
         }, "FarmRescan")
 
-        FarmRight:Button({
-            Name = "DEBUG: Force Load Farm",
-            Callback = function()
-                task.spawn(function()
-                    print("[DEBUG] Tentando carregar farm...")
-                    local ok, err = pcall(function()
-                        local src = game:HttpGet("https://raw.githubusercontent.com/NickolasFrutuoso/Roblox-Script/refs/heads/main/Mini-War.lua")
-                        print("[DEBUG] HttpGet OK, tamanho:", #src)
-                        loadstring(src)()
-                        print("[DEBUG] loadstring executado")
-                    end)
-                    if not ok then
-                        print("[DEBUG] ERRO:", tostring(err))
-                    end
-                    task.wait(3)
-                    print("[DEBUG] Após load — SCAN_RECURSOS:", tostring(_G.SCAN_RECURSOS))
-                    print("[DEBUG] Após load — RECURSOS vazio?", next(_G.RECURSOS) == nil)
-                end)
-            end,
+        FarmRight:SubLabel({
+            Text = "After scanning, wait a few seconds before selecting.",
         })
 
         -- ============================================================
