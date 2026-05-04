@@ -245,18 +245,34 @@ end
 -- FUNÇÕES AUXILIARES — BUY
 -- ============================================
 local function findShopPrompt()
+    local teleports = workspace:FindFirstChild("Teleports")
+    if not teleports then return nil, nil end
+
+    local shop = teleports:FindFirstChild("shop")
+    if not shop then return nil, nil end
+
+    -- Pega a posição do part dentro de "shop"
+    local part = shop:IsA("BasePart") and shop or shop:FindFirstChildWhichIsA("BasePart")
+    if not part then return nil, nil end
+
+    -- Acha o ProximityPrompt do shopkeeper mais próximo dessa posição
+    local bestPrompt = nil
+    local bestDist   = math.huge
+
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA("ProximityPrompt") and obj.ActionText == "Talk!" then
-            local part = obj.Parent
-            if part:IsA("BasePart") then
-                local model = part.Parent
-                if model and model.Name == "HumanoidModel" then
-                    return obj, part.Position
+            local p = obj.Parent
+            if p:IsA("BasePart") then
+                local dist = (p.Position - part.Position).Magnitude
+                if dist < bestDist then
+                    bestDist   = dist
+                    bestPrompt = obj
                 end
             end
         end
     end
-    return nil, nil
+
+    return bestPrompt, part.Position
 end
 
 local function hasItemsToBuy()
