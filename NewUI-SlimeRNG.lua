@@ -792,7 +792,7 @@ local HUB = MacLib:CreateHUB({
         RollSection:Divider()
 
         RollSection:Button({
-            Name     = "🔄 Refresh Slimes & Boosts",
+            Name     = "Refresh Slimes & Boosts",
             Callback = function()
                 -- Reconstrói as opções de slimes
                 local newSlimeOpts = buildSlimeOptions()
