@@ -111,6 +111,9 @@ if G.LegitActionDelay == nil then G.LegitActionDelay = 0.45 end
 if G.AutoDisconnect == nil then G.AutoDisconnect = false end
 if G.DiscordWebhookEnabled == nil then G.DiscordWebhookEnabled = false end
 if G.CraftWebhookEnabled == nil then G.CraftWebhookEnabled = false end
+if G.StatsWebhookEnabled == nil then G.StatsWebhookEnabled = false end
+if G.WebhookIntervalMinutes == nil then G.WebhookIntervalMinutes = 30 end
+G.WebhookIntervalMinutes = math.clamp(tonumber(G.WebhookIntervalMinutes) or 30, 10, 1440)
 
 local Runtime = {
     Running = true,
@@ -168,6 +171,12 @@ local Runtime = {
     CraftWebhookSignature = nil,
     CraftWebhookPending = false,
     CraftWebhookCraftId = nil,
+    CraftWebhookLastAttempt = 0,
+    StatsWebhookMessageId = nil,
+    StatsWebhookPending = false,
+    StatsWebhookLastUpdate = 0,
+    StatsWebhookLastAttempt = 0,
+    SyncingCraftWebhook = false,
 }
 _G.SimpleMerchantAutoBuyRuntime = Runtime
 
@@ -1741,6 +1750,9 @@ end
 --// Crafting -----------------------------------------------------------------
 
 local sendDiscordWebhook
+local sendStatsWebhook
+local StatsCraftWebhookToggle
+local CraftWebhookToggle
 local CraftTab = Window:CreateTab("Crafting", "hammer")
 
 CraftTab:CreateParagraph({
@@ -2009,12 +2021,16 @@ local function resetCraftWebhook(craftId)
     Runtime.CraftWebhookSignature = nil
     Runtime.CraftWebhookPending = false
     Runtime.CraftWebhookCraftId = craftId
+    Runtime.CraftWebhookLastAttempt = 0
 end
 
 local function updateCraftWebhook(craftId, recipe, complete, completed, total, overall, fields, signature)
     if not G.CraftWebhookEnabled then return end
     if Runtime.CraftWebhookCraftId ~= craftId then resetCraftWebhook(craftId) end
-    if Runtime.CraftWebhookPending or Runtime.CraftWebhookSignature == signature then return end
+    if Runtime.CraftWebhookPending then return end
+    local intervalSeconds = math.clamp(tonumber(G.WebhookIntervalMinutes) or 30, 10, 1440) * 60
+    if Runtime.CraftWebhookLastAttempt > 0
+        and os.clock() - Runtime.CraftWebhookLastAttempt < intervalSeconds then return end
     if type(sendDiscordWebhook) ~= "function" then return end
 
     Runtime.CraftWebhookPending = true
@@ -2049,6 +2065,8 @@ local function updateCraftWebhook(craftId, recipe, complete, completed, total, o
     if not started then
         Runtime.CraftWebhookPending = false
         CraftWebhookStatus:Set({Title = "Craft Webhook", Content = reason})
+    else
+        Runtime.CraftWebhookLastAttempt = os.clock()
     end
 end
 
@@ -2225,7 +2243,7 @@ CraftTab:CreateDropdown({
     end,
 })
 
-CraftTab:CreateToggle({
+CraftWebhookToggle = CraftTab:CreateToggle({
     Name = "Craft Webhook",
     CurrentValue = G.CraftWebhookEnabled,
     Flag = "MacCraftWebhookEnabled",
@@ -2233,6 +2251,11 @@ CraftTab:CreateToggle({
     Card = "CraftSelection",
     Callback = function(value)
         G.CraftWebhookEnabled = value
+        if not Runtime.SyncingCraftWebhook and StatsCraftWebhookToggle then
+            Runtime.SyncingCraftWebhook = true
+            StatsCraftWebhookToggle:Set(value)
+            Runtime.SyncingCraftWebhook = false
+        end
         resetCraftWebhook(G.SelectedCraft)
         if not value then
             CraftWebhookStatus:Set({Title = "Craft Webhook", Content = "Disabled."})
@@ -2493,19 +2516,24 @@ StatsTab:CreateToggle({
     Side = "Left",
     Card = "DiscordWebhook",
     Callback = function(value)
+        if not value and G.StatsWebhookEnabled and sendStatsWebhook then
+            sendStatsWebhook(false, "Discord notifications disabled.", true)
+        end
         G.DiscordWebhookEnabled = value
     end,
 })
 
 sendDiscordWebhook = function(title, description, options)
     options = options or {}
-    if not Runtime.Running then return false, "Script stopped." end
+    if not Runtime.Running and not options.allowWhenStopped then return false, "Script stopped." end
     if not G.DiscordWebhookEnabled then return false, "Enable notifications first." end
     if not validDiscordWebhook(Runtime.DiscordWebhookUrl) then
         return false, "Enter a valid Discord webhook URL."
     end
-    if Runtime.DiscordWebhookBusy then return false, "A webhook request is already in progress." end
-    if os.clock() - Runtime.DiscordWebhookLastSent < 2 then
+    if Runtime.DiscordWebhookBusy and not options.bypassBusy then
+        return false, "A webhook request is already in progress."
+    end
+    if not options.bypassCooldown and os.clock() - Runtime.DiscordWebhookLastSent < 2 then
         return false, "Wait two seconds before trying again."
     end
 
@@ -2532,7 +2560,7 @@ sendDiscordWebhook = function(title, description, options)
                 embeds = {{
                     title = tostring(title or "Overgeared"),
                     description = tostring(description or ""),
-                    color = 16777215,
+                    color = tonumber(options.color) or 16777215,
                     fields = options.fields or {},
                     footer = { text = tostring(options.footer or "MacUI notification") },
                 }},
@@ -2562,6 +2590,8 @@ sendDiscordWebhook = function(title, description, options)
             if not messageId and type(responseBody) == "string" then
                 local decodedOk, decoded = pcall(HttpService.JSONDecode, HttpService, responseBody)
                 if decodedOk and type(decoded) == "table" then messageId = decoded.id end
+            elseif not messageId and type(responseBody) == "table" then
+                messageId = responseBody.id
             end
             if not options.silentStatus then
                 DiscordWebhookStatus:Set({
@@ -2955,7 +2985,185 @@ StatsTab:CreateButton({
     Callback = resetStatsBaseline,
 })
 
+local StatsWebhookStatus = StatsTab:CreateParagraph({
+    Title = "Stats Webhook",
+    Content = "Disabled.",
+    Side = "Left",
+    Card = "DiscordWebhook",
+})
+
+local WebhookIntervalInput
+WebhookIntervalInput = StatsTab:CreateInput({
+    Name = "Update interval (minutes)",
+    CurrentValue = tostring(G.WebhookIntervalMinutes),
+    PlaceholderText = "10 - 1440",
+    Flag = "MacWebhookIntervalMinutes",
+    Side = "Left",
+    Card = "DiscordWebhook",
+    Callback = function(text)
+        local value = tonumber(text)
+        if not value then return end
+        value = math.clamp(math.floor(value), 10, 1440)
+        G.WebhookIntervalMinutes = value
+        if tostring(value) ~= tostring(text) then
+            WebhookIntervalInput:Set(tostring(value))
+        end
+        StatsWebhookStatus:Set({
+            Title = "Global webhook interval",
+            Content = string.format("Craft and player status update every %d minute(s).", value),
+        })
+    end,
+})
+
+StatsCraftWebhookToggle = StatsTab:CreateToggle({
+    Name = "Craft Webhook",
+    CurrentValue = G.CraftWebhookEnabled,
+    Side = "Left",
+    Card = "DiscordWebhook",
+    Callback = function(value)
+        if Runtime.SyncingCraftWebhook then return end
+        Runtime.SyncingCraftWebhook = true
+        G.CraftWebhookEnabled = value
+        CraftWebhookToggle:Set(value)
+        Runtime.SyncingCraftWebhook = false
+        resetCraftWebhook(G.SelectedCraft)
+        if value and CraftingData[G.SelectedCraft] then
+            CraftWebhookStatus:Set({Title = "Craft Webhook", Content = "Preparing tracker..."})
+            renderCraftProgress()
+        elseif value then
+            CraftWebhookStatus:Set({Title = "Craft Webhook", Content = "Select a craft."})
+        else
+            CraftWebhookStatus:Set({Title = "Craft Webhook", Content = "Disabled."})
+        end
+    end,
+})
+
+sendStatsWebhook = function(isOnline, reason, urgent)
+    if Runtime.StatsWebhookPending and not urgent then return false, "A stats update is already in progress." end
+
+    local snapshotOk, snapshot = pcall(statsSnapshot)
+    local dataValid = snapshotOk and type(snapshot) == "table"
+        and snapshot.Level ~= nil and snapshot.Gold ~= nil
+        and snapshot.Gem ~= nil and snapshot.MonsterKills ~= nil
+    if isOnline and not dataValid then
+        isOnline = false
+        reason = reason or "Player data could not be read."
+    end
+    snapshot = type(snapshot) == "table" and snapshot or {}
+
+    local elapsed = math.max(0, os.time() - StatsRuntime.StartedAt)
+    local sessionTime = string.format("%02d:%02d:%02d",
+        math.floor(elapsed / 3600), math.floor(elapsed % 3600 / 60), elapsed % 60)
+    local fields = {
+        {name = "Level", value = fmt(snapshot.Level), inline = true},
+        {name = "Experience", value = fmt(snapshot.Exp), inline = true},
+        {name = "Gold", value = fmt(snapshot.Gold), inline = true},
+        {name = "Gems", value = fmt(snapshot.Gem), inline = true},
+        {name = "Enemies defeated", value = fmt(snapshot.MonsterKills), inline = true},
+        {name = "Guild Points", value = fmt(snapshot.GuildPoints), inline = true},
+        {name = "Available attribute points", value = fmt(snapshot.AttributePoints), inline = true},
+        {name = "Damage", value = fmt(snapshot.AttrDamage), inline = true},
+        {name = "Defense", value = fmt(snapshot.AttrDef), inline = true},
+        {name = "Health", value = fmt(snapshot.AttrHealth), inline = true},
+        {name = "Evasion", value = fmt(snapshot.AttrEvasion), inline = true},
+        {name = "Critical chance", value = snapshot.AttrCritChance ~= nil
+            and (fmt(snapshot.AttrCritChance * 100) .. "%") or "—", inline = true},
+        {name = "Critical multiplier", value = snapshot.AttrCritMultiplier ~= nil
+            and (fmt(snapshot.AttrCritMultiplier) .. "x") or "—", inline = true},
+        {name = "Session time", value = sessionTime, inline = true},
+    }
+
+    Runtime.StatsWebhookPending = true
+    local stateText = isOnline and "ONLINE" or "OFFLINE"
+    local started, startReason = sendDiscordWebhook(
+        "Player Status | " .. stateText,
+        isOnline and "The player tracker is running normally."
+            or (reason or "The player tracker is no longer running."),
+        {
+            fields = fields,
+            messageId = Runtime.StatsWebhookMessageId,
+            footer = "Last update: " .. os.date("%Y-%m-%d %H:%M:%S"),
+            color = isOnline and 5763719 or 15548997,
+            silentStatus = true,
+            allowWhenStopped = urgent == true,
+            bypassBusy = urgent == true,
+            bypassCooldown = urgent == true,
+            callback = function(success, messageId, errorMessage)
+                Runtime.StatsWebhookPending = false
+                if success then
+                    Runtime.StatsWebhookMessageId = messageId or Runtime.StatsWebhookMessageId
+                    Runtime.StatsWebhookLastUpdate = os.clock()
+                    StatsWebhookStatus:Set({
+                        Title = "Stats Webhook | " .. stateText,
+                        Content = isOnline and "Live status updated."
+                            or "Offline status sent.",
+                    })
+                else
+                    StatsWebhookStatus:Set({
+                        Title = "Stats Webhook | OFFLINE",
+                        Content = errorMessage or "Status update failed.",
+                    })
+                end
+            end,
+        }
+    )
+    if not started then
+        Runtime.StatsWebhookPending = false
+        StatsWebhookStatus:Set({Title = "Stats Webhook | OFFLINE", Content = startReason})
+    else
+        Runtime.StatsWebhookLastAttempt = os.clock()
+    end
+    return started, startReason
+end
+
+StatsTab:CreateToggle({
+    Name = "Stats Webhook",
+    CurrentValue = G.StatsWebhookEnabled,
+    Flag = "MacStatsWebhookEnabled",
+    Side = "Left",
+    Card = "DiscordWebhook",
+    Callback = function(value)
+        if not value and G.StatsWebhookEnabled then
+            sendStatsWebhook(false, "Stats Webhook disabled.", true)
+        end
+        G.StatsWebhookEnabled = value
+        if value then
+            StatsWebhookStatus:Set({Title = "Stats Webhook", Content = "Starting live status..."})
+            task.defer(sendStatsWebhook, true)
+        end
+    end,
+})
+
+StatsTab:CreateButton({
+    Name = "Send full status now",
+    Side = "Left",
+    Card = "DiscordWebhook",
+    Callback = function()
+        if not G.StatsWebhookEnabled then
+            StatsWebhookStatus:Set({
+                Title = "Stats Webhook | OFFLINE",
+                Content = "Enable Stats Webhook first.",
+            })
+            return
+        end
+        StatsWebhookStatus:Set({Title = "Stats Webhook", Content = "Sending full status..."})
+        sendStatsWebhook(true)
+    end,
+})
+
 resetStatsBaseline()
+
+task.spawn(function()
+    while Runtime.Running do
+        task.wait(5)
+        local intervalSeconds = math.clamp(tonumber(G.WebhookIntervalMinutes) or 30, 10, 1440) * 60
+        if Runtime.Running and G.StatsWebhookEnabled
+            and (Runtime.StatsWebhookLastAttempt == 0
+                or os.clock() - Runtime.StatsWebhookLastAttempt >= intervalSeconds) then
+            sendStatsWebhook(true)
+        end
+    end
+end)
 
 task.spawn(function()
     while Runtime.Running do
@@ -2970,6 +3178,9 @@ end)
 
 function Runtime.Stop()
     pcall(function() MacLib:SaveConfig("Settings") end)
+    if G.StatsWebhookEnabled and sendStatsWebhook then
+        sendStatsWebhook(false, "Script unloaded or safety shutdown triggered.", true)
+    end
     Runtime.Running = false
     G.Enabled = false
     G.FarmEnabled = false
