@@ -176,6 +176,7 @@ local Runtime = {
     StatsWebhookPending = false,
     StatsWebhookLastUpdate = 0,
     StatsWebhookLastAttempt = 0,
+    StatsPriorityQueued = false,
     SyncingCraftWebhook = false,
 }
 _G.SimpleMerchantAutoBuyRuntime = Runtime
@@ -2034,13 +2035,18 @@ local function updateCraftWebhook(craftId, recipe, complete, completed, total, o
     if type(sendDiscordWebhook) ~= "function" then return end
 
     Runtime.CraftWebhookPending = true
+    local stateText = complete and "COMPLETED" or "IN PROGRESS"
     local started, reason = sendDiscordWebhook(
-        "Craft Progress - " .. friendlyName(craftId),
-        string.format("%s | %d/%d | %d%%", complete and "COMPLETED" or tostring(recipe.Type or "CRAFT"), completed, total, overall),
+        friendlyName(craftId) .. " | Craft Tracker",
+        string.format("%s **%s**\n%d of %d requirements complete · **%d%%**",
+            complete and "✅" or "🛠️", stateText, completed, total, overall),
         {
             fields = fields,
             messageId = Runtime.CraftWebhookMessageId,
-            footer = complete and "Craft completed" or "Live craft progress",
+            footer = string.format("Overgeared Crafting · Updates every %d minute(s)",
+                math.clamp(tonumber(G.WebhookIntervalMinutes) or 30, 10, 1440)),
+            authorName = "OVERGEARED · CRAFTING",
+            color = complete and 5763719 or 16753920,
             silentStatus = true,
             callback = function(success, messageId, errorMessage)
                 if not G.CraftWebhookEnabled or Runtime.CraftWebhookCraftId ~= craftId then return end
@@ -2169,7 +2175,8 @@ renderCraftProgress = function()
     local recipe = CraftingData[craftId]
     if not recipe or not G.CraftWebhookEnabled then return end
 
-    local fields = {}
+    local missingLines = {}
+    local completedLines = {}
     local signatureParts = {craftId}
     local completed = 0
     local total = 1 + #(recipe.Materials or {})
@@ -2181,11 +2188,12 @@ renderCraftProgress = function()
     local goldProgress = math.min(goldHave, goldNeed)
     if goldDone then completed += 1 else complete = false end
     progressSum += goldNeed > 0 and math.clamp(goldHave / goldNeed, 0, 1) or 1
-    table.insert(fields, {
-        name = (goldDone and "[DONE] " or "[MISSING] ") .. "Gold",
-        value = string.format("%d / %d", goldProgress, goldNeed),
-        inline = false,
-    })
+    local goldLine = string.format("**Gold** — `%d / %d`", goldProgress, goldNeed)
+    if goldDone then
+        table.insert(completedLines, goldLine)
+    else
+        table.insert(missingLines, goldLine .. string.format("  _(missing %d)_", goldNeed - goldProgress))
+    end
     table.insert(signatureParts, string.format("Gold:%d/%d", goldProgress, goldNeed))
 
     local materials = table.clone(recipe.Materials or {})
@@ -2208,16 +2216,34 @@ renderCraftProgress = function()
         elseif not Runtime.Catalog[id] then
             table.insert(sources, "Unknown source")
         end
-        table.insert(fields, {
-            name = (done and "[DONE] " or "[MISSING] ") .. friendlyName(id),
-            value = string.format("%d / %d\nSource: %s", shownHave, needed, table.concat(sources, " + ")),
-            inline = false,
-        })
+        local materialLine = string.format("**%s** — `%d / %d`",
+            friendlyName(id), shownHave, needed)
+        if done then
+            table.insert(completedLines, materialLine)
+        else
+            table.insert(missingLines, materialLine
+                .. string.format("  _(missing %d)_\n↳ %s", needed - shownHave, table.concat(sources, " + ")))
+        end
         table.insert(signatureParts, string.format("%s:%d/%d", id, shownHave, needed))
     end
 
     local overall = total > 0 and math.floor(progressSum / total * 100 + 0.5) or 100
     table.insert(signatureParts, complete and "complete" or "progress")
+    local fields = {
+        {name = "Progress", value = string.format("**%d / %d**", completed, total), inline = true},
+        {name = "Completion", value = string.format("**%d%%**", overall), inline = true},
+        {name = "Type", value = tostring(recipe.Type or "Craft"), inline = true},
+        {
+            name = complete and "Requirements" or "Missing requirements",
+            value = (#missingLines > 0 and table.concat(missingLines, "\n\n") or "Nothing missing."):sub(1, 1024),
+            inline = false,
+        },
+        {
+            name = "Completed requirements",
+            value = (#completedLines > 0 and table.concat(completedLines, "\n") or "None yet."):sub(1, 1024),
+            inline = false,
+        },
+    }
     updateCraftWebhook(craftId, recipe, complete, completed, total, overall,
         fields, table.concat(signatureParts, "|"))
 end
@@ -2562,6 +2588,10 @@ sendDiscordWebhook = function(title, description, options)
                     description = tostring(description or ""),
                     color = tonumber(options.color) or 16777215,
                     fields = options.fields or {},
+                    timestamp = options.timestamp or os.date("!%Y-%m-%dT%H:%M:%SZ"),
+                    author = options.authorName and {
+                        name = tostring(options.authorName):sub(1, 256),
+                    } or nil,
                     footer = { text = tostring(options.footer or "MacUI notification") },
                 }},
             })
@@ -3039,6 +3069,22 @@ StatsCraftWebhookToggle = StatsTab:CreateToggle({
 })
 
 sendStatsWebhook = function(isOnline, reason, urgent)
+    if urgent and (Runtime.DiscordWebhookBusy or Runtime.StatsWebhookPending) then
+        if Runtime.StatsPriorityQueued then return true end
+        Runtime.StatsPriorityQueued = true
+        task.spawn(function()
+            local deadline = os.clock() + 15
+            while (Runtime.DiscordWebhookBusy or Runtime.StatsWebhookPending)
+                and os.clock() < deadline do
+                task.wait(0.1)
+            end
+            Runtime.StatsPriorityQueued = false
+            if not Runtime.DiscordWebhookBusy and not Runtime.StatsWebhookPending then
+                sendStatsWebhook(isOnline, reason, true)
+            end
+        end)
+        return true
+    end
     if Runtime.StatsWebhookPending and not urgent then return false, "A stats update is already in progress." end
 
     local snapshotOk, snapshot = pcall(statsSnapshot)
@@ -3054,39 +3100,48 @@ sendStatsWebhook = function(isOnline, reason, urgent)
     local elapsed = math.max(0, os.time() - StatsRuntime.StartedAt)
     local sessionTime = string.format("%02d:%02d:%02d",
         math.floor(elapsed / 3600), math.floor(elapsed % 3600 / 60), elapsed % 60)
+    local displayName = tostring(LocalPlayer.DisplayName or LocalPlayer.Name):gsub("[`*_~|>]", "")
+    local username = tostring(LocalPlayer.Name):gsub("[`*_~|>]", "")
+    local baseline = StatsRuntime.Baseline or {}
+    local sessionGains = table.concat({
+        string.format("Level `%s`", gainText(snapshot.Level, baseline.Level)),
+        string.format("Gold `%s`", gainText(snapshot.Gold, baseline.Gold)),
+        string.format("Gems `%s`", gainText(snapshot.Gem, baseline.Gem)),
+        string.format("Kills `%s`", gainText(snapshot.MonsterKills, baseline.MonsterKills)),
+    }, " · ")
     local fields = {
-        {name = "Level", value = fmt(snapshot.Level), inline = true},
-        {name = "Experience", value = fmt(snapshot.Exp), inline = true},
-        {name = "Gold", value = fmt(snapshot.Gold), inline = true},
-        {name = "Gems", value = fmt(snapshot.Gem), inline = true},
-        {name = "Enemies defeated", value = fmt(snapshot.MonsterKills), inline = true},
+        {
+            name = "Player",
+            value = string.format("**%s** (@%s)\nUser ID: `%s`", displayName, username, tostring(LocalPlayer.UserId)),
+            inline = false,
+        },
+        {name = "Level", value = "**" .. fmt(snapshot.Level) .. "**", inline = true},
+        {name = "Experience", value = "**" .. fmt(snapshot.Exp) .. "**", inline = true},
+        {name = "Session", value = "`" .. sessionTime .. "`", inline = true},
+        {name = "Gold", value = "**" .. fmt(snapshot.Gold) .. "**", inline = true},
+        {name = "Gems", value = "**" .. fmt(snapshot.Gem) .. "**", inline = true},
+        {name = "Kills", value = "**" .. fmt(snapshot.MonsterKills) .. "**", inline = true},
         {name = "Guild Points", value = fmt(snapshot.GuildPoints), inline = true},
-        {name = "Available attribute points", value = fmt(snapshot.AttributePoints), inline = true},
-        {name = "Damage", value = fmt(snapshot.AttrDamage), inline = true},
-        {name = "Defense", value = fmt(snapshot.AttrDef), inline = true},
-        {name = "Health", value = fmt(snapshot.AttrHealth), inline = true},
-        {name = "Evasion", value = fmt(snapshot.AttrEvasion), inline = true},
-        {name = "Critical chance", value = snapshot.AttrCritChance ~= nil
-            and (fmt(snapshot.AttrCritChance * 100) .. "%") or "—", inline = true},
-        {name = "Critical multiplier", value = snapshot.AttrCritMultiplier ~= nil
-            and (fmt(snapshot.AttrCritMultiplier) .. "x") or "—", inline = true},
-        {name = "Session time", value = sessionTime, inline = true},
+        {name = "Attribute Points", value = fmt(snapshot.AttributePoints), inline = true},
+        {name = "Players in server", value = tostring(#Players:GetPlayers()), inline = true},
+        {name = "Session gains", value = sessionGains, inline = false},
     }
 
     Runtime.StatsWebhookPending = true
     local stateText = isOnline and "ONLINE" or "OFFLINE"
     local started, startReason = sendDiscordWebhook(
-        "Player Status | " .. stateText,
-        isOnline and "The player tracker is running normally."
-            or (reason or "The player tracker is no longer running."),
+        "Overgeared | Player Status",
+        isOnline and ("🟢 **ONLINE**\nLive session overview for **" .. displayName .. "**.")
+            or ("🔴 **OFFLINE**\n" .. (reason or "The player tracker is no longer running.")),
         {
             fields = fields,
             messageId = Runtime.StatsWebhookMessageId,
-            footer = "Last update: " .. os.date("%Y-%m-%d %H:%M:%S"),
+            footer = string.format("Overgeared Tracker · Updates every %d minute(s)",
+                math.clamp(tonumber(G.WebhookIntervalMinutes) or 30, 10, 1440)),
+            authorName = "OVERGEARED · LIVE SESSION",
             color = isOnline and 5763719 or 15548997,
             silentStatus = true,
             allowWhenStopped = urgent == true,
-            bypassBusy = urgent == true,
             bypassCooldown = urgent == true,
             callback = function(success, messageId, errorMessage)
                 Runtime.StatsWebhookPending = false
