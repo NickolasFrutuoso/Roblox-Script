@@ -115,6 +115,83 @@ if G.StatsWebhookEnabled == nil then G.StatsWebhookEnabled = false end
 if G.WebhookIntervalMinutes == nil then G.WebhookIntervalMinutes = 30 end
 G.WebhookIntervalMinutes = math.clamp(tonumber(G.WebhookIntervalMinutes) or 30, 10, 1440)
 
+-- MacUI's current build no longer exposes the old SaveConfig/LoadConfig methods.
+-- Keep persistence owned by this script so library updates cannot silently break it.
+local CONFIG_FOLDER = "OvergearedMacUI"
+local CONFIG_PATH = CONFIG_FOLDER .. "/Settings.json"
+local CONFIG_KEYS = {
+    "Enabled", "SelectedItems", "BuyMode", "Quantity",
+    "AutoAttribute", "AttributeTarget", "SelectedCraft",
+    "FarmEnabled", "SelectedMobs", "FarmDistance", "AttackDelay",
+    "BlockEnabled", "BlockDelay", "BlockHold", "BlockRange",
+    "DodgeEnabled", "DodgeDistance", "DodgeMargin",
+    "QuestEnabled", "SelectedQuests", "QuestTeleportDelay", "QuestInteractDelay", "NativeAutoQuest",
+    "AutoPotionEnabled", "SelectedPotions", "PotionThreshold", "PotionCooldown",
+    "NoClip", "AntiAFK", "AntiVoid", "MenuKeybind",
+    "LegitFarmEnabled", "LegitFarmMode", "LegitFarmRadius", "LegitActionRange",
+    "LegitFaceTarget", "LegitAutoAttack", "LegitUseSkills", "LegitActionDelay",
+    "CraftModalEnabled", "AutoDisconnect",
+    "DiscordWebhookEnabled", "CraftWebhookEnabled", "StatsWebhookEnabled", "WebhookIntervalMinutes",
+}
+
+local function saveSettings()
+    if type(writefile) ~= "function" then
+        return false, "File saving is unavailable in this executor."
+    end
+
+    local ok, err = pcall(function()
+        if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder(CONFIG_FOLDER) then
+            makefolder(CONFIG_FOLDER)
+        end
+
+        local data = {Version = 1}
+        for _, key in ipairs(CONFIG_KEYS) do
+            local value = G[key]
+            if type(value) == "boolean" or type(value) == "number" or type(value) == "string" or type(value) == "table" then
+                data[key] = value
+            end
+        end
+        -- The webhook URL is deliberately session-only and is never written to disk.
+        writefile(CONFIG_PATH, HttpService:JSONEncode(data))
+    end)
+    return ok, ok and "Settings saved successfully." or ("Could not save settings: " .. tostring(err))
+end
+
+local function loadSettings()
+    if type(readfile) ~= "function" or type(isfile) ~= "function" or not isfile(CONFIG_PATH) then
+        return false, "No saved settings found."
+    end
+
+    local ok, result = pcall(function()
+        return HttpService:JSONDecode(readfile(CONFIG_PATH))
+    end)
+    if not ok or type(result) ~= "table" then
+        return false, "Saved settings are invalid and were ignored."
+    end
+
+    for _, key in ipairs(CONFIG_KEYS) do
+        if result[key] ~= nil then G[key] = result[key] end
+    end
+    return true, "Saved settings loaded."
+end
+
+local settingsLoaded, settingsLoadMessage = loadSettings()
+
+-- Normalize persisted values before controls are created.
+if type(G.SelectedItems) ~= "table" then G.SelectedItems = {} end
+if type(G.SelectedMobs) ~= "table" then G.SelectedMobs = {} end
+if type(G.SelectedQuests) ~= "table" then G.SelectedQuests = {} end
+if type(G.SelectedPotions) ~= "table" then G.SelectedPotions = {MediumHealthPotion = true} end
+if G.BuyMode == "Quantidade" then G.BuyMode = "Quantity" end
+if G.BuyMode == "Todos" then G.BuyMode = "All" end
+if G.BuyMode ~= "All" then G.BuyMode = "Quantity" end
+if G.SelectedCraft == "Nenhum" then G.SelectedCraft = "None" end
+if G.LegitFarmMode == "Parado" then G.LegitFarmMode = "Stationary" end
+if G.LegitFarmMode == "Aproximar" then G.LegitFarmMode = "Approach" end
+if G.LegitFarmMode ~= "Approach" then G.LegitFarmMode = "Stationary" end
+G.Quantity = math.max(1, math.floor(tonumber(G.Quantity) or 1))
+G.WebhookIntervalMinutes = math.clamp(tonumber(G.WebhookIntervalMinutes) or 30, 10, 1440)
+
 local Runtime = {
     Running = true,
     Connections = {},
@@ -2719,9 +2796,9 @@ StatsTab:CreateToggle({
     end,
 })
 
-StatsTab:CreateParagraph({
+local SettingsSaveStatus = StatsTab:CreateParagraph({
     Title = "Player options",
-    Content = "Additional farming utilities.",
+    Content = settingsLoaded and settingsLoadMessage or "Settings are ready to be saved.",
     Side = "Right",
     Card = "PlayerOptions",
 })
@@ -2764,7 +2841,13 @@ StatsTab:CreateDropdown({
 
 StatsTab:CreateButton({
     Name = "Save settings now", Side = "Right", Card = "PlayerOptions",
-    Callback = function() pcall(function() MacLib:SaveConfig("Settings") end) end,
+    Callback = function()
+        local ok, message = saveSettings()
+        SettingsSaveStatus:Set({
+            Title = ok and "Settings saved" or "Settings not saved",
+            Content = message,
+        })
+    end,
 })
 
 local function readNumber(parent, name)
@@ -3232,7 +3315,7 @@ task.spawn(function()
 end)
 
 function Runtime.Stop()
-    pcall(function() MacLib:SaveConfig("Settings") end)
+    saveSettings()
     if G.StatsWebhookEnabled and sendStatsWebhook then
         sendStatsWebhook(false, "Script unloaded or safety shutdown triggered.", true)
     end
@@ -3264,7 +3347,6 @@ function Runtime.Stop()
     pcall(function() Rayfield:Destroy() end)
 end
 
-pcall(function() MacLib:LoadConfig("Settings") end)
 if G.BuyMode == "Quantidade" then G.BuyMode = "Quantity" end
 if G.BuyMode == "Todos" then G.BuyMode = "All" end
 if G.BuyMode ~= "All" then G.BuyMode = "Quantity" end
@@ -3283,7 +3365,7 @@ end
 task.spawn(function()
     while Runtime.Running do
         task.wait(5)
-        if Runtime.Running then pcall(function() MacLib:SaveConfig("Settings") end) end
+        if Runtime.Running then saveSettings() end
     end
 end)
 
