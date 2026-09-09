@@ -3,10 +3,11 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local VirtualUser = game:GetService("VirtualUser")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local VirtualUser = game:GetService("VirtualUser")
 
 local MerchantRequest = ReplicatedStorage:WaitForChild("MerchantRequest")
 local MerchantStockUpdate = ReplicatedStorage:WaitForChild("MerchantStockUpdate")
@@ -65,14 +66,16 @@ end
 _G.SimpleMerchantAutoBuy = _G.SimpleMerchantAutoBuy or {}
 local G = _G.SimpleMerchantAutoBuy
 if G.Enabled == nil then G.Enabled = false end
-if G.SelectedItems == nil then G.SelectedItems = {} end
-if G.BuyMode == nil then G.BuyMode = "Quantidade" end
+if type(G.SelectedItems) ~= "table" then G.SelectedItems = {} end
+if G.BuyMode == nil then G.BuyMode = "Quantity" end
+if G.BuyMode == "Quantidade" then G.BuyMode = "Quantity" end
+if G.BuyMode == "Todos" then G.BuyMode = "All" end
 if G.Quantity == nil then G.Quantity = 1 end
 if G.AutoAttribute == nil then G.AutoAttribute = false end
 if G.AttributeTarget == nil then G.AttributeTarget = "Damage" end
-if G.SelectedCraft == nil then G.SelectedCraft = "Nenhum" end
+if G.SelectedCraft == nil or G.SelectedCraft == "Nenhum" then G.SelectedCraft = "None" end
 if G.FarmEnabled == nil then G.FarmEnabled = false end
-if G.SelectedMobs == nil then G.SelectedMobs = {} end
+if type(G.SelectedMobs) ~= "table" then G.SelectedMobs = {} end
 if G.FarmDistance == nil then G.FarmDistance = 6 end
 if G.AttackDelay == nil then G.AttackDelay = 0.45 end
 if G.BlockEnabled == nil then G.BlockEnabled = false end
@@ -83,12 +86,12 @@ if G.DodgeEnabled == nil then G.DodgeEnabled = false end
 if G.DodgeDistance == nil then G.DodgeDistance = 8 end
 if G.DodgeMargin == nil then G.DodgeMargin = 5 end
 if G.QuestEnabled == nil then G.QuestEnabled = true end
-if G.SelectedQuests == nil then G.SelectedQuests = {} end
+if type(G.SelectedQuests) ~= "table" then G.SelectedQuests = {} end
 if G.QuestTeleportDelay == nil then G.QuestTeleportDelay = 0.5 end
 if G.QuestInteractDelay == nil then G.QuestInteractDelay = 0.75 end
 if G.NativeAutoQuest == nil then G.NativeAutoQuest = false end
 if G.AutoPotionEnabled == nil then G.AutoPotionEnabled = false end
-if G.SelectedPotions == nil then G.SelectedPotions = {MediumHealthPotion = true} end
+if type(G.SelectedPotions) ~= "table" then G.SelectedPotions = {MediumHealthPotion = true} end
 if G.PotionThreshold == nil then G.PotionThreshold = 90 end
 if G.PotionCooldown == nil then G.PotionCooldown = 1 end
 if G.NoClip == nil then G.NoClip = true end
@@ -96,7 +99,8 @@ if G.AntiAFK == nil then G.AntiAFK = false end
 if G.AntiVoid == nil then G.AntiVoid = true end
 if G.MenuKeybind == nil then G.MenuKeybind = "F12" end
 if G.LegitFarmEnabled == nil then G.LegitFarmEnabled = false end
-if G.LegitFarmMode == nil then G.LegitFarmMode = "Parado" end
+if G.LegitFarmMode == nil or G.LegitFarmMode == "Parado" then G.LegitFarmMode = "Stationary" end
+if G.LegitFarmMode == "Aproximar" then G.LegitFarmMode = "Approach" end
 if G.LegitFarmRadius == nil then G.LegitFarmRadius = 25 end
 if G.LegitActionRange == nil then G.LegitActionRange = 12 end
 if G.CraftModalEnabled == nil then G.CraftModalEnabled = false end
@@ -105,6 +109,8 @@ if G.LegitAutoAttack == nil then G.LegitAutoAttack = true end
 if G.LegitUseSkills == nil then G.LegitUseSkills = true end
 if G.LegitActionDelay == nil then G.LegitActionDelay = 0.45 end
 if G.AutoDisconnect == nil then G.AutoDisconnect = false end
+if G.DiscordWebhookEnabled == nil then G.DiscordWebhookEnabled = false end
+if G.CraftWebhookEnabled == nil then G.CraftWebhookEnabled = false end
 
 local Runtime = {
     Running = true,
@@ -124,7 +130,7 @@ local Runtime = {
     AllocatingAttribute = false,
     CappedAttributes = {},
     BuyRequested = false,
-    LastBuyStatus = "Aguardando Auto Buy.",
+    LastBuyStatus = "Waiting for Auto Buy.",
     FarmTarget = nil,
     MovementPausedUntil = 0,
     ActiveAreas = {},
@@ -155,6 +161,13 @@ local Runtime = {
     PurchaseTotalQuantity = 0,
     PurchaseTotalSpent = 0,
     CraftModalGui = nil,
+    DiscordWebhookUrl = "",
+    DiscordWebhookBusy = false,
+    DiscordWebhookLastSent = 0,
+    CraftWebhookMessageId = nil,
+    CraftWebhookSignature = nil,
+    CraftWebhookPending = false,
+    CraftWebhookCraftId = nil,
 }
 _G.SimpleMerchantAutoBuyRuntime = Runtime
 
@@ -214,7 +227,7 @@ local windowSize = compactUI and mobileWindowSize(viewport) or UDim2.fromOffset(
 
 local MacWindow = MacLib:Window({
     Title = "Merchant + Player Stats",
-    Subtitle = "Auto Buy · Crafting · Progressão",
+    Subtitle = "Auto Buy · Crafting · Progression",
     Size = windowSize,
     DragStyle = 1,
     AcrylicBlur = false,
@@ -621,8 +634,8 @@ end
 local CombatTab = Window:CreateTab("Combat", nil)
 
 local FarmStatus = CombatTab:CreateParagraph({
-    Title = "Auto Farm parado",
-    Content = "Selecione um ou mais monstros.",
+    Title = "Stationary Auto Farm",
+    Content = "Select one or more enemies.",
     Side = "Left", Card = "Farm",
 })
 
@@ -630,7 +643,7 @@ local MobDropdown
 local FarmToggle
 local LegitFarmToggle
 MobDropdown = CombatTab:CreateDropdown({
-    Name = "Monstros em ordem de prioridade",
+    Name = "Enemies in priority order",
     Options = mobOptions,
     CurrentOption = (function()
         local labels = {}
@@ -674,7 +687,7 @@ FarmToggle = CombatTab:CreateToggle({
 })
 
 CombatTab:CreateSlider({
-    Name = "Distância do monstro", Range = {3, 15}, Increment = 0.5,
+    Name = "Distance from enemy", Range = {3, 15}, Increment = 0.5,
     CurrentValue = G.FarmDistance, Suffix = " studs",
     Side = "Left", Card = "Farm", Flag = "MacCombatDistance",
     Callback = function(value) G.FarmDistance = value end,
@@ -682,7 +695,7 @@ CombatTab:CreateSlider({
 
 local LegitStatus = CombatTab:CreateParagraph({
     Title = "Legit Farm",
-    Content = "Movimento e visão usam o alvo; ataques podem funcionar sem ele.",
+    Content = "Movement and facing use the target; attacks can run without one.",
     Side = "Left", Card = "LegitFarm",
 })
 
@@ -708,13 +721,16 @@ LegitFarmToggle = CombatTab:CreateToggle({
     end,
 })
 
-CombatTab:CreateDropdown({
-    Name = "Modo", Options = {"Parado", "Aproximar"},
+local LegitModeDropdown = CombatTab:CreateDropdown({
+    Name = "Mode", Options = {"Stationary", "Approach"},
     CurrentOption = {G.LegitFarmMode}, MultipleOptions = false,
     Flag = "MacLegitFarmMode", Side = "Left", Card = "LegitFarm",
     Callback = function(options)
-        G.LegitFarmMode = options[1] or "Parado"
-        if G.LegitFarmMode == "Parado" then
+        local mode = options[1]
+        if mode == "Parado" then mode = "Stationary" end
+        if mode == "Aproximar" then mode = "Approach" end
+        G.LegitFarmMode = mode == "Approach" and "Approach" or "Stationary"
+        if G.LegitFarmMode == "Stationary" then
             local _, humanoid, root = characterData()
             if humanoid and root then humanoid:MoveTo(root.Position) end
         end
@@ -722,7 +738,7 @@ CombatTab:CreateDropdown({
 })
 
 CombatTab:CreateToggle({
-    Name = "Olhar para o mob", CurrentValue = G.LegitFaceTarget,
+    Name = "Face the enemy", CurrentValue = G.LegitFaceTarget,
     Flag = "MacLegitFaceTarget", Side = "Left", Card = "LegitFarm",
     Callback = function(value)
         G.LegitFaceTarget = value
@@ -731,7 +747,7 @@ CombatTab:CreateToggle({
 })
 
 CombatTab:CreateSlider({
-    Name = "Intervalo das ações", Range = {0.1, 2}, Increment = 0.05, Suffix = "s",
+    Name = "Action interval", Range = {0.1, 2}, Increment = 0.05, Suffix = "s",
     CurrentValue = G.LegitActionDelay, Flag = "MacLegitActionDelay",
     Side = "Left", Card = "LegitFarm",
     Callback = function(value) G.LegitActionDelay = value end,
@@ -744,20 +760,20 @@ CombatTab:CreateToggle({
 })
 
 CombatTab:CreateToggle({
-    Name = "Auto Skills 1, 2 e 3", CurrentValue = G.LegitUseSkills,
+    Name = "Auto Skills 1, 2 and 3", CurrentValue = G.LegitUseSkills,
     Flag = "MacLegitUseSkills", Side = "Left", Card = "LegitFarm",
     Callback = function(value) G.LegitUseSkills = value end,
 })
 
 CombatTab:CreateSlider({
-    Name = "Raio de busca", Range = {5, 60}, Increment = 1, Suffix = " studs",
+    Name = "Search radius", Range = {5, 60}, Increment = 1, Suffix = " studs",
     CurrentValue = G.LegitFarmRadius, Flag = "MacLegitFarmRadius",
     Side = "Left", Card = "LegitFarm",
     Callback = function(value) G.LegitFarmRadius = value end,
 })
 
 CombatTab:CreateSlider({
-    Name = "Intervalo de ataque", Range = {0.1, 1.5}, Increment = 0.05,
+    Name = "Attack interval", Range = {0.1, 1.5}, Increment = 0.05,
     CurrentValue = G.AttackDelay, Suffix = "s",
     Side = "Left", Card = "Farm", Flag = "MacCombatAttackDelay",
     Callback = function(value) G.AttackDelay = value end,
@@ -765,7 +781,7 @@ CombatTab:CreateSlider({
 
 local BlockStatus = CombatTab:CreateParagraph({
     Title = "Auto Block",
-    Content = "Defende ao iniciar uma animação hostil próxima.",
+    Content = "Blocks when a nearby hostile animation starts.",
     Side = "Right", Card = "Block",
 })
 
@@ -782,14 +798,14 @@ CombatTab:CreateToggle({
 })
 
 CombatTab:CreateSlider({
-    Name = "Atraso da defesa", Range = {0, 0.5}, Increment = 0.01,
+    Name = "Block delay", Range = {0, 0.5}, Increment = 0.01,
     CurrentValue = G.BlockDelay, Suffix = "s",
     Side = "Right", Card = "Block", Flag = "MacCombatBlockDelay",
     Callback = function(value) G.BlockDelay = value end,
 })
 
 CombatTab:CreateSlider({
-    Name = "Duração da defesa", Range = {0.05, 1}, Increment = 0.01,
+    Name = "Block duration", Range = {0.05, 1}, Increment = 0.01,
     CurrentValue = G.BlockHold, Suffix = "s",
     Side = "Right", Card = "Block", Flag = "MacCombatBlockHold",
     Callback = function(value) G.BlockHold = value end,
@@ -797,7 +813,7 @@ CombatTab:CreateSlider({
 
 local DodgeStatus = CombatTab:CreateParagraph({
     Title = "Auto Dodge",
-    Content = "Rajadas: atrás do lançador · Áreas: ponto horizontal seguro.",
+    Content = "Blasts: behind the caster · Areas: nearest safe horizontal point.",
     Side = "Right", Card = "Dodge",
 })
 
@@ -808,14 +824,14 @@ CombatTab:CreateToggle({
 })
 
 CombatTab:CreateSlider({
-    Name = "Distância da esquiva", Range = {4, 20}, Increment = 0.5,
+    Name = "Dodge distance", Range = {4, 20}, Increment = 0.5,
     CurrentValue = G.DodgeDistance, Suffix = " studs",
     Side = "Right", Card = "Dodge", Flag = "MacCombatDodgeDistance",
     Callback = function(value) G.DodgeDistance = value end,
 })
 
 CombatTab:CreateSlider({
-    Name = "Margem das áreas", Range = {1, 12}, Increment = 0.5,
+    Name = "Area safety margin", Range = {1, 12}, Increment = 0.5,
     CurrentValue = G.DodgeMargin, Suffix = " studs",
     Side = "Right", Card = "Dodge", Flag = "MacCombatDodgeMargin",
     Callback = function(value) G.DodgeMargin = value end,
@@ -823,19 +839,19 @@ CombatTab:CreateSlider({
 
 local AutoDisconnectStatus = CombatTab:CreateParagraph({
     Title = "Auto Disconnect",
-    Content = "Descarrega completamente o script quando outro jogador entrar.",
+    Content = "Fully unloads the script when another player joins.",
     Side = "Right", Card = "Safety",
 })
 
 CombatTab:CreateToggle({
-    Name = "Parar ao entrar jogador", CurrentValue = G.AutoDisconnect,
+    Name = "Stop when a player joins", CurrentValue = G.AutoDisconnect,
     Side = "Right", Card = "Safety", Flag = "MacCombatAutoDisconnect",
     Callback = function(value)
         G.AutoDisconnect = value
         AutoDisconnectStatus:Set({
             Title = "Auto Disconnect",
-            Content = value and "Ativo · aguardando a entrada de outro jogador."
-                or "Desativado.",
+            Content = value and "Enabled · waiting for another player to join."
+                or "Disabled.",
         })
     end,
 })
@@ -844,8 +860,8 @@ connect(Players.PlayerAdded, function(player)
     if not Runtime.Running or not G.AutoDisconnect or player == LocalPlayer then return end
     pcall(function()
         AutoDisconnectStatus:Set({
-            Title = "Jogador detectado",
-            Content = "Encerrando todas as funções...",
+            Title = "Player detected",
+            Content = "Stopping all features...",
         })
     end)
     task.spawn(function()
@@ -1038,7 +1054,7 @@ connect(RunService.Heartbeat, function()
         stopFarmFacing()
         if Runtime.LastFarmStatusTarget ~= false then
             Runtime.LastFarmStatusTarget = false
-            FarmStatus:Set({Title = "Aguardando monstro", Content = "Nenhum selecionado está vivo; tentando o próximo."})
+            FarmStatus:Set({Title = "Waiting for enemy", Content = "No selected enemy is alive; trying the next one."})
         end
         return
     end
@@ -1052,7 +1068,7 @@ connect(RunService.Heartbeat, function()
     if Runtime.LastFarmStatusTarget ~= Runtime.FarmTarget then
         Runtime.LastFarmStatusTarget = Runtime.FarmTarget
         local id = mobDataId(Runtime.FarmTarget.Name)
-        FarmStatus:Set({Title = "Auto Farm ativo", Content = string.format("Alvo: %s · Lv.%d",
+        FarmStatus:Set({Title = "Auto Farm enabled", Content = string.format("Target: %s · Lv.%d",
             MonsterData[id] and (MonsterData[id].Name or id) or id,
             MonsterData[id] and (MonsterData[id].Level or 0) or 0)})
     end
@@ -1176,7 +1192,7 @@ connect(RunService.Heartbeat, function()
         stopFarmFacing()
         if os.clock() - Runtime.LegitLastStatus >= 0.5 then
             Runtime.LegitLastStatus = os.clock()
-            LegitStatus:Set({Title = "Legit Farm", Content = Runtime.LegitTargetId and "Aguardando respawn." or "Nenhum mob no raio."})
+            LegitStatus:Set({Title = "Legit Farm", Content = Runtime.LegitTargetId and "Waiting for respawn." or "No enemy within range."})
         end
         return
     end
@@ -1187,7 +1203,7 @@ connect(RunService.Heartbeat, function()
         releaseFarmFacing()
     end
     local distance = (root.Position - targetRoot.Position).Magnitude
-    if G.LegitFarmMode == "Aproximar"
+    if G.LegitFarmMode == "Approach"
         and os.clock() - Runtime.LegitDetectedAt >= 1
         and os.clock() - Runtime.LegitLastMove >= 0.2 then
         Runtime.LegitLastMove = os.clock()
@@ -1255,7 +1271,7 @@ local function pickupSelectedQuests()
     if Runtime.QuestBusy or not G.QuestEnabled then return end
     local ids = selectedQuestIds()
     if #ids == 0 then
-        if QuestStatus then QuestStatus:Set({Title = "Nenhuma quest selecionada", Content = "Selecione até três quests."}) end
+        if QuestStatus then QuestStatus:Set({Title = "No quest selected", Content = "Select up to three quests."}) end
         return
     end
 
@@ -1286,9 +1302,9 @@ local function pickupSelectedQuests()
         Runtime.FarmTarget = nil
         if QuestStatus then
             QuestStatus:Set({
-                Title = ok and "Coleta de quests concluída" or "Falha ao coletar quests",
-                Content = ok and string.format("%d de %d NPCs encontrados.", picked, #ids)
-                    or "A coleta foi liberada para uma nova tentativa.",
+                Title = ok and "Quest pickup completed" or "Quest pickup failed",
+                Content = ok and string.format("%d of %d NPCs found.", picked, #ids)
+                    or "Quest pickup is ready for another attempt.",
             })
         end
     end)
@@ -1308,42 +1324,43 @@ local function potionCount(id)
     return value and value:IsA("ValueBase") and math.max(0, tonumber(value.Value) or 0) or 0
 end
 
-local function choosePotion(missingHealth)
-    local available = {}
-    for order, id in ipairs(potionIds) do
-        if G.SelectedPotions[id] and potionCount(id) > 0 then
-            table.insert(available, {
-                id = id,
-                heal = tonumber(PotionData[id] and PotionData[id].Health) or 0,
-                order = order,
-            })
-        end
-    end
-    table.sort(available, function(a, b)
-        if a.heal ~= b.heal then return a.heal < b.heal end
-        return a.order < b.order
+local function consumeSelectedPotions(humanoid)
+    if Runtime.PotionBusy then return end
+    Runtime.PotionBusy = true
+
+    task.spawn(function()
+        pcall(function()
+            for _, potionId in ipairs(potionIds) do
+                if not Runtime.Running or not G.AutoPotionEnabled then break end
+                if not humanoid.Parent or humanoid.Health <= 0 or humanoid.Health >= humanoid.MaxHealth then break end
+
+                if G.SelectedPotions[potionId] and potionCount(potionId) > 0 then
+                    Runtime.LastPotionUse = os.clock()
+                    pcall(function() UsePotion:FireServer(potionId) end)
+                    task.wait(math.max(1, tonumber(G.PotionCooldown) or 1))
+                end
+            end
+        end)
+        Runtime.PotionBusy = false
     end)
-    for _, potion in ipairs(available) do
-        if potion.heal >= missingHealth then return potion.id end
-    end
-    return available[#available] and available[#available].id or nil
 end
 
 task.spawn(function()
     while Runtime.Running do
         task.wait(0.1)
-        if G.AutoPotionEnabled and not Runtime.PotionBusy
-            and os.clock() - Runtime.LastPotionUse >= math.max(1, G.PotionCooldown) then
+        if G.AutoPotionEnabled and not Runtime.PotionBusy then
             local _, humanoid = characterData()
-            if humanoid and humanoid.MaxHealth > 0
-                and humanoid.Health / humanoid.MaxHealth * 100 < G.PotionThreshold then
-                local potionId = choosePotion(humanoid.MaxHealth - humanoid.Health)
-                if potionId then
-                    Runtime.PotionBusy = true
-                    Runtime.LastPotionUse = os.clock()
-                    pcall(function() UsePotion:FireServer(potionId) end)
-                    Runtime.PotionBusy = false
+            local hasSelectedPotion = false
+            for _, potionId in ipairs(potionIds) do
+                if G.SelectedPotions[potionId] then
+                    hasSelectedPotion = true
+                    break
                 end
+            end
+            if humanoid and humanoid.MaxHealth > 0
+                and hasSelectedPotion
+                and humanoid.Health / humanoid.MaxHealth * 100 < (tonumber(G.PotionThreshold) or 90) then
+                consumeSelectedPotions(humanoid)
             end
         end
     end
@@ -1353,7 +1370,7 @@ local UtilityTab = Window:CreateTab("Quests + Potion", nil)
 
 QuestStatus = UtilityTab:CreateParagraph({
     Title = "Auto Quest",
-    Content = "Selecione até três quests e faça uma coleta inicial.",
+    Content = "Select up to three quests and run the initial pickup.",
     Side = "Left", Card = "Quests",
 })
 
@@ -1378,7 +1395,7 @@ local QuestDropdown
 local updatingQuests = false
 local lastQuestLabels = table.clone(initialQuestLabels)
 QuestDropdown = UtilityTab:CreateDropdown({
-    Name = "Quests (máximo 3)", Options = questLabels, CurrentOption = initialQuestLabels,
+    Name = "Quests (maximum 3)", Options = questLabels, CurrentOption = initialQuestLabels,
     MultipleOptions = true, Flag = "MacSelectedQuests", Side = "Left", Card = "Quests",
     Callback = function(labels)
         if updatingQuests then return end
@@ -1397,12 +1414,12 @@ QuestDropdown = UtilityTab:CreateDropdown({
     end,
 })
 UtilityTab:CreateToggle({
-    Name = "Permitir coleta de quests", CurrentValue = G.QuestEnabled,
+    Name = "Enable quest pickup", CurrentValue = G.QuestEnabled,
     Flag = "MacQuestEnabled", Side = "Left", Card = "Quests",
     Callback = function(value) G.QuestEnabled = value end,
 })
 UtilityTab:CreateToggle({
-    Name = "Repetir quest automaticamente", CurrentValue = G.NativeAutoQuest,
+    Name = "Automatically repeat quests", CurrentValue = G.NativeAutoQuest,
     Flag = "MacNativeAutoQuest", Side = "Left", Card = "Quests",
     Callback = function(value)
         G.NativeAutoQuest = value
@@ -1410,23 +1427,23 @@ UtilityTab:CreateToggle({
     end,
 })
 UtilityTab:CreateSlider({
-    Name = "Espera após teleportar", Range = {0, 3}, Increment = 0.05, Suffix = "s",
+    Name = "Wait after teleporting", Range = {0, 3}, Increment = 0.05, Suffix = "s",
     CurrentValue = G.QuestTeleportDelay, Flag = "MacQuestTeleportDelay", Side = "Left", Card = "Quests",
     Callback = function(value) G.QuestTeleportDelay = value end,
 })
 UtilityTab:CreateSlider({
-    Name = "Espera entre quests", Range = {0, 3}, Increment = 0.05, Suffix = "s",
+    Name = "Wait between quests", Range = {0, 3}, Increment = 0.05, Suffix = "s",
     CurrentValue = G.QuestInteractDelay, Flag = "MacQuestInteractDelay", Side = "Left", Card = "Quests",
     Callback = function(value) G.QuestInteractDelay = value end,
 })
 UtilityTab:CreateButton({
-    Name = "Teleportar e pegar quests", Side = "Left", Card = "Quests",
+    Name = "Teleport and pick up quests", Side = "Left", Card = "Quests",
     Callback = pickupSelectedQuests,
 })
 
 local PotionStatus = UtilityTab:CreateParagraph({
-    Title = "Auto Potion inteligente",
-    Content = "Usa uma poção por ciclo e escolhe a menor capaz de recuperar a vida perdida.",
+    Title = "Auto Potion",
+    Content = "Below the threshold, uses selected potions in order and stops at full health.",
     Side = "Right", Card = "Potions",
 })
 local potionLabels, PotionLabelToId, PotionIdToLabel = {}, {}, {}
@@ -1446,7 +1463,7 @@ UtilityTab:CreateToggle({
     Callback = function(value) G.AutoPotionEnabled = value end,
 })
 UtilityTab:CreateDropdown({
-    Name = "Poções disponíveis", Options = potionLabels, CurrentOption = initialPotionLabels,
+    Name = "Available potions", Options = potionLabels, CurrentOption = initialPotionLabels,
     MultipleOptions = true, Flag = "MacSelectedPotions", Side = "Right", Card = "Potions",
     Callback = function(labels)
         table.clear(G.SelectedPotions)
@@ -1457,12 +1474,12 @@ UtilityTab:CreateDropdown({
     end,
 })
 UtilityTab:CreateSlider({
-    Name = "Usar abaixo de", Range = {1, 100}, Increment = 1, Suffix = "% HP",
+    Name = "Use below", Range = {1, 100}, Increment = 1, Suffix = "% HP",
     CurrentValue = G.PotionThreshold, Flag = "MacPotionThreshold", Side = "Right", Card = "Potions",
     Callback = function(value) G.PotionThreshold = value end,
 })
 UtilityTab:CreateSlider({
-    Name = "Intervalo", Range = {1, 10}, Increment = 0.1, Suffix = "s",
+    Name = "Interval", Range = {1, 10}, Increment = 0.1, Suffix = "s",
     CurrentValue = math.max(1, G.PotionCooldown), Flag = "MacPotionCooldown", Side = "Right", Card = "Potions",
     Callback = function(value) G.PotionCooldown = math.max(1, value) end,
 })
@@ -1478,8 +1495,8 @@ task.spawn(function()
         end
         pcall(function()
             PotionStatus:Set({
-                Title = "Auto Potion inteligente",
-                Content = #rows > 0 and table.concat(rows, " · ") or "Nenhuma poção selecionada.",
+                Title = "Auto Potion",
+                Content = #rows > 0 and table.concat(rows, " · ") or "No potion selected.",
             })
         end)
     end
@@ -1488,15 +1505,15 @@ end)
 local Tab = Window:CreateTab("Auto Buy", "shopping-bag")
 
 local Status = Tab:CreateParagraph({
-    Title = "Aguardando estoque",
-    Content = "A primeira atualização não realiza compras.",
+    Title = "Waiting for stock",
+    Content = "The first update does not trigger purchases.",
     Side = "Left", Card = "BuyControls",
 })
 
 local ItemDropdown
 ItemDropdown = Tab:CreateDropdown({
-    Name = "Itens",
-    Options = {"Carregando catálogo..."},
+    Name = "Items",
+    Options = {"Loading catalog..."},
     CurrentOption = {},
     MultipleOptions = true,
     Flag = "SimpleMerchantItems",
@@ -1513,19 +1530,19 @@ ItemDropdown = Tab:CreateDropdown({
 })
 
 local StockStatus = Tab:CreateParagraph({
-    Title = "Estoque atual",
-    Content = "Aguardando resposta do servidor...",
+    Title = "Current stock",
+    Content = "Waiting for server response...",
     Side = "Right", Card = "CurrentStock",
 })
 
 local PurchaseHistoryStatus = Tab:CreateParagraph({
-    Title = "Histórico de compras",
-    Content = "0 itens · 0 Gold",
+    Title = "Purchase history",
+    Content = "0 items · 0 Gold",
     Side = "Right", Card = "PurchaseHistory",
 })
 
 Tab:CreateToggle({
-    Name = "Auto Buy selecionados",
+    Name = "Auto Buy selected items",
     CurrentValue = G.Enabled,
     Flag = "SimpleMerchantEnabled",
     Side = "Left", Card = "BuyControls",
@@ -1539,22 +1556,25 @@ Tab:CreateToggle({
 })
 
 local BuyModeDropdown = Tab:CreateDropdown({
-    Name = "Modo de compra",
-    Options = {"Quantidade", "Todos"},
+    Name = "Purchase mode",
+    Options = {"Quantity", "All"},
     CurrentOption = {G.BuyMode},
     MultipleOptions = false,
     Flag = "SimpleMerchantMode",
     Side = "Left", Card = "BuyControls",
     Callback = function(options)
-        G.BuyMode = options[1] or "Quantidade"
+        local mode = options[1]
+        if mode == "Quantidade" then mode = "Quantity" end
+        if mode == "Todos" then mode = "All" end
+        G.BuyMode = mode == "All" and "All" or "Quantity"
     end,
 })
 
 local QuantityInput
 QuantityInput = Tab:CreateInput({
-    Name = "Quantidade por item",
+    Name = "Quantity per item",
     CurrentValue = tostring(G.Quantity),
-    PlaceholderText = "Exemplo: 10",
+    PlaceholderText = "Example: 10",
     RemoveTextAfterFocusLost = false,
     Flag = "SimpleMerchantQuantity",
     Side = "Left", Card = "BuyControls",
@@ -1597,7 +1617,7 @@ local function buildCatalogDropdown()
         table.insert(options, label)
     end
 
-    if #options == 0 then options = {"Nenhum item identificado"} end
+    if #options == 0 then options = {"No items found"} end
     Runtime.UpdatingDropdown = true
     ItemDropdown:Refresh(options)
     ItemDropdown:Set(selectedLabels())
@@ -1625,8 +1645,8 @@ local function updateStatus()
     local seconds = Runtime.Remaining % 60
     pcall(function()
         Status:Set({
-            Title = string.format("Próxima reposição: %02d:%02d", minutes, seconds),
-            Content = string.format("%d disponíveis · %d selecionados\n%s",
+            Title = string.format("Next restock: %02d:%02d", minutes, seconds),
+            Content = string.format("%d available · %d selected\n%s",
                 available, selected, Runtime.LastBuyStatus),
         })
     end)
@@ -1652,15 +1672,15 @@ local function updateStockDisplay()
     table.sort(rows)
     pcall(function()
         StockStatus:Set({
-            Title = "Estoque atual",
-            Content = #rows > 0 and table.concat(rows, "\n") or "Nenhum item disponível.",
+            Title = "Current stock",
+            Content = #rows > 0 and table.concat(rows, "\n") or "No items available.",
         })
     end)
 end
 
 local function updatePurchaseHistory()
     local lines = {
-        string.format("%d itens · %d Gold", Runtime.PurchaseTotalQuantity, Runtime.PurchaseTotalSpent),
+        string.format("%d items · %d Gold", Runtime.PurchaseTotalQuantity, Runtime.PurchaseTotalSpent),
     }
 
     local itemIds = {}
@@ -1680,7 +1700,7 @@ local function updatePurchaseHistory()
     end
     pcall(function()
         PurchaseHistoryStatus:Set({
-            Title = "Histórico de compras",
+            Title = "Purchase history",
             Content = table.concat(lines, "\n"),
         })
     end)
@@ -1720,11 +1740,12 @@ end
 
 --// Crafting -----------------------------------------------------------------
 
+local sendDiscordWebhook
 local CraftTab = Window:CreateTab("Crafting", "hammer")
 
 CraftTab:CreateParagraph({
-    Title = "Receita",
-    Content = "Escolha um item.",
+    Title = "Recipe",
+    Content = "Choose an item.",
     Side = "Left",
     Card = "CraftSelection",
 })
@@ -1737,17 +1758,24 @@ local CraftSummary = CraftTab:CreateParagraph({
 })
 
 local CraftProgress = CraftTab:CreateParagraph({
-    Title = "Materiais",
+    Title = "Materials",
     Content = "—",
     Side = "Right",
     Card = "CraftMaterials",
 })
 
 local CraftSources = CraftTab:CreateParagraph({
-    Title = "Fontes",
+    Title = "Sources",
     Content = "—",
     Side = "Right",
     Card = "CraftSources",
+})
+
+local CraftWebhookStatus = CraftTab:CreateParagraph({
+    Title = "Craft Webhook",
+    Content = "Disabled.",
+    Side = "Left",
+    Card = "CraftSelection",
 })
 
 local function friendlyName(text)
@@ -1817,14 +1845,14 @@ modalBody.TextSize = compactUI and 12 or 13
 modalBody.TextXAlignment = Enum.TextXAlignment.Left
 modalBody.TextYAlignment = Enum.TextYAlignment.Top
 modalBody.TextWrapped = false
-modalBody.Text = "Selecione uma receita."
+modalBody.Text = "Select a recipe."
 modalBody.Parent = craftModal
 
 makeDraggable(modalHeader, craftModal)
 Runtime.CraftModalGui = craftModalGui
 
 CraftTab:CreateToggle({
-    Name = "Exibir progresso flutuante",
+    Name = "Show floating progress",
     CurrentValue = G.CraftModalEnabled,
     Flag = "MacCraftProgressModal",
     Side = "Left", Card = "CraftSelection",
@@ -1836,8 +1864,8 @@ CraftTab:CreateToggle({
 
 local function updateCraftModal(craftId, completed, total, overall, missingLines)
     modalHeader.Text = friendlyName(craftId)
-    modalSummary.Text = string.format("%d/%d concluídos · %d%%", completed, total, overall)
-    modalBody.Text = #missingLines > 0 and table.concat(missingLines, "\n") or "Pronto para criar."
+    modalSummary.Text = string.format("%d/%d completed · %d%%", completed, total, overall)
+    modalBody.Text = #missingLines > 0 and table.concat(missingLines, "\n") or "Ready to craft."
     local visibleLines = math.max(1, math.min(#missingLines, 9))
     craftModal.Size = UDim2.fromOffset(compactUI and 270 or 310, 72 + visibleLines * 19)
 end
@@ -1885,9 +1913,9 @@ local function dropSourceText(resourceId)
     return table.concat(parts, "\n")
 end
 
-local craftOptions = {"Nenhum"}
-local CraftLabelToId = {Nenhum = "Nenhum"}
-local CraftIdToLabel = {Nenhum = "Nenhum"}
+local craftOptions = {"None"}
+local CraftLabelToId = {None = "None"}
+local CraftIdToLabel = {None = "None"}
 for craftId, recipe in pairs(CraftingData) do
     local label = string.format("%s  ·  %s", friendlyName(craftId), tostring(recipe.Type or "Craft"))
     CraftLabelToId[label] = craftId
@@ -1896,8 +1924,8 @@ for craftId, recipe in pairs(CraftingData) do
 end
 table.sort(craftOptions, function(a, b)
     if a == b then return false end
-    if a == "Nenhum" then return true end
-    if b == "Nenhum" then return false end
+    if a == "None" then return true end
+    if b == "None" then return false end
     return a < b
 end)
 
@@ -1926,11 +1954,11 @@ local function applyCraftToAutoBuy(craftId)
         end
     end
 
-    G.BuyMode = "Todos"
+    G.BuyMode = "All"
     Runtime.UpdatingDropdown = true
     pcall(function()
         ItemDropdown:Set(selectedLabels())
-        BuyModeDropdown:Set({"Todos"})
+        BuyModeDropdown:Set({"All"})
     end)
     Runtime.UpdatingDropdown = false
 end
@@ -1976,18 +2004,66 @@ local function applyCraftAutomation(craftId)
     applyCraftToFarm(craftId)
 end
 
+local function resetCraftWebhook(craftId)
+    Runtime.CraftWebhookMessageId = nil
+    Runtime.CraftWebhookSignature = nil
+    Runtime.CraftWebhookPending = false
+    Runtime.CraftWebhookCraftId = craftId
+end
+
+local function updateCraftWebhook(craftId, recipe, complete, completed, total, overall, fields, signature)
+    if not G.CraftWebhookEnabled then return end
+    if Runtime.CraftWebhookCraftId ~= craftId then resetCraftWebhook(craftId) end
+    if Runtime.CraftWebhookPending or Runtime.CraftWebhookSignature == signature then return end
+    if type(sendDiscordWebhook) ~= "function" then return end
+
+    Runtime.CraftWebhookPending = true
+    local started, reason = sendDiscordWebhook(
+        "Craft Progress - " .. friendlyName(craftId),
+        string.format("%s | %d/%d | %d%%", complete and "COMPLETED" or tostring(recipe.Type or "CRAFT"), completed, total, overall),
+        {
+            fields = fields,
+            messageId = Runtime.CraftWebhookMessageId,
+            footer = complete and "Craft completed" or "Live craft progress",
+            silentStatus = true,
+            callback = function(success, messageId, errorMessage)
+                if not G.CraftWebhookEnabled or Runtime.CraftWebhookCraftId ~= craftId then return end
+                Runtime.CraftWebhookPending = false
+                if success then
+                    Runtime.CraftWebhookMessageId = messageId or Runtime.CraftWebhookMessageId
+                    Runtime.CraftWebhookSignature = signature
+                    CraftWebhookStatus:Set({
+                        Title = "Craft Webhook",
+                        Content = complete and "Craft completed | tracker updated."
+                            or string.format("Tracking %s | %d%%", friendlyName(craftId), overall),
+                    })
+                else
+                    CraftWebhookStatus:Set({
+                        Title = "Craft Webhook",
+                        Content = errorMessage or "Failed to update the tracker.",
+                    })
+                end
+            end,
+        }
+    )
+    if not started then
+        Runtime.CraftWebhookPending = false
+        CraftWebhookStatus:Set({Title = "Craft Webhook", Content = reason})
+    end
+end
+
 
 local function renderCraftProgress()
     local craftId = G.SelectedCraft
     local recipe = CraftingData[craftId]
     if not recipe then
         pcall(function()
-            CraftSummary:Set({Title = "Craft", Content = "Selecione uma receita."})
-            CraftProgress:Set({Title = "Materiais", Content = "—"})
-            CraftSources:Set({Title = "Fontes", Content = "—"})
+            CraftSummary:Set({Title = "Craft", Content = "Select a recipe."})
+            CraftProgress:Set({Title = "Materials", Content = "—"})
+            CraftSources:Set({Title = "Sources", Content = "—"})
             modalHeader.Text = "Craft"
             modalSummary.Text = "0/0"
-            modalBody.Text = "Selecione uma receita."
+            modalBody.Text = "Select a recipe."
             craftModal.Size = UDim2.fromOffset(compactUI and 270 or 310, 110)
         end)
         return
@@ -2038,7 +2114,7 @@ local function renderCraftProgress()
                 table.insert(acquisition, string.format("%s Lv.%d · %.0f%% ×%d",
                     friendlyName(source.name), source.level, source.chance * 100, source.amount))
             elseif not Runtime.Catalog[id] then
-                table.insert(acquisition, "Fonte desconhecida")
+                table.insert(acquisition, "Unknown source")
             end
             table.insert(sourceLines, string.format("%s → %s",
                 friendlyName(id), table.concat(acquisition, " + ")))
@@ -2052,41 +2128,125 @@ local function renderCraftProgress()
         CraftSummary:Set({
             Title = friendlyName(craftId),
             Content = string.format("%s · %d/%d · %d%%",
-                complete and "Pronto" or tostring(recipe.Type or "Craft"),
+                complete and "Ready" or tostring(recipe.Type or "Craft"),
                 completedRequirements, totalRequirements, overall),
         })
         CraftProgress:Set({
-            Title = "Materiais",
+            Title = "Materials",
             Content = table.concat(lines, "\n"),
         })
         CraftSources:Set({
-            Title = "Fontes do que falta",
+            Title = "Sources for missing items",
             Content = #sourceLines > 0 and table.concat(sourceLines, "\n\n")
-                or "Completo.",
+                or "Complete.",
         })
     end)
 end
 
+local renderCraftProgressBase = renderCraftProgress
+renderCraftProgress = function()
+    renderCraftProgressBase()
+
+    local craftId = G.SelectedCraft
+    local recipe = CraftingData[craftId]
+    if not recipe or not G.CraftWebhookEnabled then return end
+
+    local fields = {}
+    local signatureParts = {craftId}
+    local completed = 0
+    local total = 1 + #(recipe.Materials or {})
+    local progressSum = 0
+    local complete = true
+    local goldHave = currentGold()
+    local goldNeed = tonumber(recipe.GoldCost) or 0
+    local goldDone = goldHave >= goldNeed
+    local goldProgress = math.min(goldHave, goldNeed)
+    if goldDone then completed += 1 else complete = false end
+    progressSum += goldNeed > 0 and math.clamp(goldHave / goldNeed, 0, 1) or 1
+    table.insert(fields, {
+        name = (goldDone and "[DONE] " or "[MISSING] ") .. "Gold",
+        value = string.format("%d / %d", goldProgress, goldNeed),
+        inline = false,
+    })
+    table.insert(signatureParts, string.format("Gold:%d/%d", goldProgress, goldNeed))
+
+    local materials = table.clone(recipe.Materials or {})
+    table.sort(materials, function(a, b) return tostring(a.Id) < tostring(b.Id) end)
+    for _, material in ipairs(materials) do
+        local id = tostring(material.Id)
+        local needed = tonumber(material.Amount) or 0
+        local have = ownedResourceAmount(id)
+        local shownHave = math.min(have, needed)
+        local done = have >= needed
+        if done then completed += 1 else complete = false end
+        progressSum += needed > 0 and math.clamp(have / needed, 0, 1) or 1
+
+        local sources = {}
+        if Runtime.Catalog[id] then table.insert(sources, "Merchant") end
+        local source = (DropSources[id] or {})[1]
+        if source then
+            table.insert(sources, string.format("%s Lv.%d | %.0f%% x%d",
+                friendlyName(source.name), source.level, source.chance * 100, source.amount))
+        elseif not Runtime.Catalog[id] then
+            table.insert(sources, "Unknown source")
+        end
+        table.insert(fields, {
+            name = (done and "[DONE] " or "[MISSING] ") .. friendlyName(id),
+            value = string.format("%d / %d\nSource: %s", shownHave, needed, table.concat(sources, " + ")),
+            inline = false,
+        })
+        table.insert(signatureParts, string.format("%s:%d/%d", id, shownHave, needed))
+    end
+
+    local overall = total > 0 and math.floor(progressSum / total * 100 + 0.5) or 100
+    table.insert(signatureParts, complete and "complete" or "progress")
+    updateCraftWebhook(craftId, recipe, complete, completed, total, overall,
+        fields, table.concat(signatureParts, "|"))
+end
+
 CraftTab:CreateDropdown({
-    Name = "Craft selecionado",
+    Name = "Selected craft",
     Options = craftOptions,
-    CurrentOption = {CraftingData[G.SelectedCraft] and CraftIdToLabel[G.SelectedCraft] or "Nenhum"},
+    CurrentOption = {CraftingData[G.SelectedCraft] and CraftIdToLabel[G.SelectedCraft] or "None"},
     MultipleOptions = false,
     Flag = "MerchantSelectedCraft",
     Side = "Left",
     Card = "CraftSelection",
     Callback = function(options)
-        local craftId = CraftLabelToId[options[1]] or "Nenhum"
+        local craftId = CraftLabelToId[options[1]] or "None"
         G.SelectedCraft = craftId
+        resetCraftWebhook(craftId)
         if CraftingData[craftId] then
             applyCraftAutomation(craftId)
+        elseif G.CraftWebhookEnabled then
+            CraftWebhookStatus:Set({Title = "Craft Webhook", Content = "Select a craft."})
         end
         renderCraftProgress()
     end,
 })
 
+CraftTab:CreateToggle({
+    Name = "Craft Webhook",
+    CurrentValue = G.CraftWebhookEnabled,
+    Flag = "MacCraftWebhookEnabled",
+    Side = "Left",
+    Card = "CraftSelection",
+    Callback = function(value)
+        G.CraftWebhookEnabled = value
+        resetCraftWebhook(G.SelectedCraft)
+        if not value then
+            CraftWebhookStatus:Set({Title = "Craft Webhook", Content = "Disabled."})
+        elseif not CraftingData[G.SelectedCraft] then
+            CraftWebhookStatus:Set({Title = "Craft Webhook", Content = "Select a craft."})
+        else
+            CraftWebhookStatus:Set({Title = "Craft Webhook", Content = "Preparing tracker..."})
+            renderCraftProgress()
+        end
+    end,
+})
+
 CraftTab:CreateButton({
-    Name = "Sincronizar Merchant + Auto Farm",
+    Name = "Sync Merchant + Auto Farm",
     Side = "Left",
     Card = "CraftSelection",
     Callback = function()
@@ -2109,20 +2269,20 @@ local function buySelectedStock()
     table.sort(ids)
 
     if #ids == 0 then
-        Runtime.LastBuyStatus = "Nenhum item selecionado está disponível no estoque."
+        Runtime.LastBuyStatus = "No selected item is currently in stock."
         Runtime.Buying = false
         updateStatus()
         return
     end
 
     local requestsSent = 0
-    Runtime.LastBuyStatus = "Comprando itens selecionados..."
+    Runtime.LastBuyStatus = "Buying selected items..."
     updateStatus()
 
     for _, id in ipairs(ids) do
         if not Runtime.Running or not G.Enabled then break end
         local item = Runtime.Stock[id]
-        local amount = G.BuyMode == "Todos"
+        local amount = G.BuyMode == "All"
             and item.stock
             or math.min(G.Quantity, item.stock)
 
@@ -2138,7 +2298,7 @@ local function buySelectedStock()
     end
 
     Runtime.Buying = false
-    Runtime.LastBuyStatus = string.format("Última execução: %d solicitação(ões) enviada(s).", requestsSent)
+    Runtime.LastBuyStatus = string.format("Last run: %d purchase request(s) sent.", requestsSent)
     updateStatus()
 end
 
@@ -2193,8 +2353,8 @@ connect(MerchantStockUpdate.OnClientEvent, function(payload, secondsRemaining)
     elseif isRestock then
         pcall(function()
             Status:Set({
-                Title = "Nova reposição detectada",
-                Content = "Compra dos selecionados em 5 segundos.",
+                Title = "New restock detected",
+                Content = "Selected items will be purchased in 5 seconds.",
             })
         end)
         scheduleRestockPurchase()
@@ -2256,11 +2416,15 @@ task.spawn(function()
     end
 end)
 
--- Reservado para uma estratégia futura que não interfira nas ações do jogador.
 connect(LocalPlayer.Idled, function()
     if G.AntiAFK then
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.zero)
+        pcall(function()
+            local cameraCFrame = Workspace.CurrentCamera and Workspace.CurrentCamera.CFrame or CFrame.new()
+            VirtualUser:CaptureController()
+            VirtualUser:Button2Down(Vector2.zero, cameraCFrame)
+            task.wait()
+            VirtualUser:Button2Up(Vector2.zero, cameraCFrame)
+        end)
     end
 end)
 
@@ -2271,30 +2435,197 @@ local StatsRuntime = {
     StartedAt = os.time(),
 }
 
+local function getHttpRequest()
+    local environment = getgenv and getgenv() or _G
+    return environment.request
+        or environment.http_request
+        or (environment.syn and environment.syn.request)
+        or (environment.http and environment.http.request)
+        or (environment.fluxus and environment.fluxus.request)
+end
+
+local function normalizeDiscordWebhook(url)
+    url = tostring(url or ""):match("^%s*(.-)%s*$")
+    url = url:gsub("^https://discordapp%.com/", "https://discord.com/")
+    url = url:gsub("^https://canary%.discord%.com/", "https://discord.com/")
+    url = url:gsub("^https://ptb%.discord%.com/", "https://discord.com/")
+    url = url:gsub("%?.*$", "")
+    url = url:gsub("/+$", "")
+    return url
+end
+
+local function validDiscordWebhook(url)
+    if type(url) ~= "string" then return false end
+    return url:match("^https://discord%.com/api/webhooks/%d+/[%w_-]+$") ~= nil
+end
+
+local DiscordWebhookStatus = StatsTab:CreateParagraph({
+    Title = "Discord Webhook",
+    Content = "Paste the URL below. It is kept only in memory for this session.",
+    Side = "Left",
+    Card = "DiscordWebhook",
+})
+
+StatsTab:CreateInput({
+    Name = "Webhook URL",
+    CurrentValue = "",
+    PlaceholderText = "https://discord.com/api/webhooks/...",
+    Side = "Left",
+    Card = "DiscordWebhook",
+    -- No Flag: the credential is never written to the configuration file.
+    Callback = function(value)
+        Runtime.DiscordWebhookUrl = normalizeDiscordWebhook(value)
+        DiscordWebhookStatus:Set({
+            Title = "Discord Webhook",
+            Content = Runtime.DiscordWebhookUrl == ""
+                and "Empty URL | nothing will be sent."
+                or (validDiscordWebhook(Runtime.DiscordWebhookUrl)
+                    and "URL recognized | ready to test."
+                    or "Invalid URL | use a Discord webhook URL."),
+        })
+    end,
+})
+
+StatsTab:CreateToggle({
+    Name = "Enable notifications",
+    CurrentValue = G.DiscordWebhookEnabled,
+    Flag = "MacDiscordWebhookEnabled",
+    Side = "Left",
+    Card = "DiscordWebhook",
+    Callback = function(value)
+        G.DiscordWebhookEnabled = value
+    end,
+})
+
+sendDiscordWebhook = function(title, description, options)
+    options = options or {}
+    if not Runtime.Running then return false, "Script stopped." end
+    if not G.DiscordWebhookEnabled then return false, "Enable notifications first." end
+    if not validDiscordWebhook(Runtime.DiscordWebhookUrl) then
+        return false, "Enter a valid Discord webhook URL."
+    end
+    if Runtime.DiscordWebhookBusy then return false, "A webhook request is already in progress." end
+    if os.clock() - Runtime.DiscordWebhookLastSent < 2 then
+        return false, "Wait two seconds before trying again."
+    end
+
+    local request = getHttpRequest()
+    if type(request) ~= "function" then
+        return false, "This environment does not support HTTP requests."
+    end
+
+    Runtime.DiscordWebhookBusy = true
+    Runtime.DiscordWebhookLastSent = os.clock()
+    local requestUrl = Runtime.DiscordWebhookUrl
+    local requestMethod = "POST"
+    if options.messageId then
+        requestUrl = requestUrl .. "/messages/" .. tostring(options.messageId)
+        requestMethod = "PATCH"
+    else
+        requestUrl = requestUrl .. "?wait=true"
+    end
+    task.spawn(function()
+        local ok, response = pcall(function()
+            local body = HttpService:JSONEncode({
+                username = "Overgeared Tracker",
+                allowed_mentions = { parse = {} },
+                embeds = {{
+                    title = tostring(title or "Overgeared"),
+                    description = tostring(description or ""),
+                    color = 16777215,
+                    fields = options.fields or {},
+                    footer = { text = tostring(options.footer or "MacUI notification") },
+                }},
+            })
+            return request({
+                Url = requestUrl,
+                Method = requestMethod,
+                Headers = { ["Content-Type"] = "application/json" },
+                Body = body,
+            })
+        end)
+
+        Runtime.DiscordWebhookBusy = false
+        local responseTable = type(response) == "table" and response or nil
+        local statusCode = ok and tonumber(responseTable and (
+            responseTable.StatusCode or responseTable.Status
+                or responseTable.status_code or responseTable.status
+        )) or 0
+        local responseBody = responseTable and (responseTable.Body or responseTable.body)
+        local requestSucceeded = ok and (
+            (statusCode >= 200 and statusCode < 300)
+            or (statusCode == 0 and responseTable
+                and (responseTable.Success == true or responseTable.success == true))
+        )
+        if requestSucceeded then
+            local messageId = options.messageId
+            if not messageId and type(responseBody) == "string" then
+                local decodedOk, decoded = pcall(HttpService.JSONDecode, HttpService, responseBody)
+                if decodedOk and type(decoded) == "table" then messageId = decoded.id end
+            end
+            if not options.silentStatus then
+                DiscordWebhookStatus:Set({
+                    Title = "Discord Webhook",
+                    Content = "Test sent successfully.",
+                })
+            end
+            if options.callback then options.callback(true, messageId) end
+        else
+            local errorMessage = ok and ("Discord returned HTTP " .. tostring(statusCode) .. ".")
+                or "The request failed before reaching Discord."
+            if not options.silentStatus then
+                DiscordWebhookStatus:Set({
+                    Title = "Webhook failed",
+                    Content = errorMessage,
+                })
+            end
+            if options.callback then options.callback(false, nil, errorMessage) end
+        end
+    end)
+    return true
+end
+
+StatsTab:CreateButton({
+    Name = "Test webhook",
+    Side = "Left",
+    Card = "DiscordWebhook",
+    Callback = function()
+        local started, reason = sendDiscordWebhook(
+            "Webhook connected",
+            "The Overgeared MacUI notification test was successful."
+        )
+        if not started then
+            DiscordWebhookStatus:Set({Title = "Discord Webhook", Content = reason})
+        else
+            DiscordWebhookStatus:Set({Title = "Discord Webhook", Content = "Sending test..."})
+        end
+    end,
+})
+
 local StatsSummary = StatsTab:CreateParagraph({
-    Title = "Resumo da sessão",
-    Content = "Aguardando os dados replicados do jogador...",
+    Title = "Session summary",
+    Content = "Waiting for replicated player data...",
     Side = "Left",
     Card = "SessionSummary",
 })
 
 local StatsResources = StatsTab:CreateParagraph({
-    Title = "Inventário e ganhos",
-    Content = "Aguardando recursos...",
+    Title = "Inventory and gains",
+    Content = "Waiting for resources...",
     Side = "Left",
     Card = "InventoryGains",
 })
 
 local StatsCombat = StatsTab:CreateParagraph({
-    Title = "Atributos de combate",
-    Content = "Aguardando atributos...",
+    Title = "Combat stats",
+    Content = "Waiting for stats...",
     Side = "Right",
     Card = "CombatStats",
 })
 
 local AttributeStatus = StatsTab:CreateParagraph({
-    Title = "Auto atributos",
-    Content = "Escolha um atributo e ative a distribuição automática.",
+    Title = "Auto Attributes",
+    Content = "Choose an attribute and enable automatic point allocation.",
     Side = "Right",
     Card = "AutoAttributes",
 })
@@ -2304,7 +2635,7 @@ local attributeOptions = {
 }
 
 StatsTab:CreateDropdown({
-    Name = "Atributo para receber os pontos",
+    Name = "Attribute to receive points",
     Options = attributeOptions,
     CurrentOption = {G.AttributeTarget},
     MultipleOptions = false,
@@ -2318,7 +2649,7 @@ StatsTab:CreateDropdown({
 })
 
 StatsTab:CreateToggle({
-    Name = "Auto distribuir pontos",
+    Name = "Auto allocate points",
     CurrentValue = G.AutoAttribute,
     Flag = "MerchantStatsAutoAttribute",
     Side = "Right",
@@ -2329,14 +2660,14 @@ StatsTab:CreateToggle({
 })
 
 StatsTab:CreateParagraph({
-    Title = "Opções do jogador",
-    Content = "Recursos auxiliares do farm.",
+    Title = "Player options",
+    Content = "Additional farming utilities.",
     Side = "Right",
     Card = "PlayerOptions",
 })
 
 StatsTab:CreateToggle({
-    Name = "NoClip durante o farm", CurrentValue = G.NoClip,
+    Name = "NoClip while farming", CurrentValue = G.NoClip,
     Flag = "MacPlayerNoClip", Side = "Right", Card = "PlayerOptions",
     Callback = function(value)
         G.NoClip = value
@@ -2351,14 +2682,14 @@ StatsTab:CreateToggle({
 })
 
 StatsTab:CreateToggle({
-    Name = "Anti-AFK (reservado)", CurrentValue = G.AntiAFK,
+    Name = "Anti-AFK", CurrentValue = G.AntiAFK,
     Flag = "MacPlayerAntiAFK", Side = "Right", Card = "PlayerOptions",
     Callback = function(value) G.AntiAFK = value end,
 })
 
 local keybindOptions = {"F12", "RightShift", "RightControl", "LeftAlt"}
 StatsTab:CreateDropdown({
-    Name = "Tecla da interface", Options = keybindOptions,
+    Name = "Interface keybind", Options = keybindOptions,
     CurrentOption = {table.find(keybindOptions, G.MenuKeybind) and G.MenuKeybind or "F12"},
     MultipleOptions = false, Flag = "MacMenuKeybind", Side = "Right", Card = "PlayerOptions",
     Callback = function(options)
@@ -2372,7 +2703,7 @@ StatsTab:CreateDropdown({
 })
 
 StatsTab:CreateButton({
-    Name = "Salvar opções agora", Side = "Right", Card = "PlayerOptions",
+    Name = "Save settings now", Side = "Right", Card = "PlayerOptions",
     Callback = function() pcall(function() MacLib:SaveConfig("Settings") end) end,
 })
 
@@ -2467,16 +2798,16 @@ local function tryAllocateAttribute()
     local availableBefore = availableAttributePoints()
     local allocated = allocatedPoints(target)
     if not rule or availableBefore == nil then
-        setAttributeStatus("Auto atributos aguardando", "Não foi possível ler os pontos disponíveis.")
+        setAttributeStatus("Auto Attributes waiting", "Could not read the available points.")
         return
     end
     if availableBefore <= 0 then
-        setAttributeStatus("Auto atributos ativo", "Sem pontos disponíveis · alvo: " .. target)
+        setAttributeStatus("Auto Attributes enabled", "No points available · target: " .. target)
         return
     end
     if Runtime.CappedAttributes[target] or (rule.cap and allocated and allocated >= rule.cap) then
         Runtime.CappedAttributes[target] = true
-        setAttributeStatus("Atributo no máximo", target .. " não receberá novas tentativas.")
+        setAttributeStatus("Attribute capped", target .. " will not receive further attempts.")
         return
     end
 
@@ -2488,11 +2819,11 @@ local function tryAllocateAttribute()
         local availableAfter = availableAttributePoints()
         if availableAfter ~= nil and availableAfter < availableBefore then
             Runtime.CappedAttributes[target] = nil
-            setAttributeStatus("Ponto distribuído", string.format(
-                "%s · disponíveis: %d", target, availableAfter))
+            setAttributeStatus("Point allocated", string.format(
+                "%s · available: %d", target, availableAfter))
         elseif G.AttributeTarget == target then
             Runtime.CappedAttributes[target] = true
-            setAttributeStatus("Sem alteração", target .. " foi tratado como máximo ou recusado pelo servidor.")
+            setAttributeStatus("No change", target .. " was treated as capped or rejected by the server.")
         end
         Runtime.AllocatingAttribute = false
     end)
@@ -2549,8 +2880,8 @@ local function renderStats()
     expNow = expNow or current.Exp
 
     local summaryLines = {
-        "Sessão  " .. timeText,
-        string.format("Nível  %s (%s)", fmt(current.Level), gainText(current.Level, StatsRuntime.Baseline.Level)),
+        "Session  " .. timeText,
+        string.format("Level  %s (%s)", fmt(current.Level), gainText(current.Level, StatsRuntime.Baseline.Level)),
     }
     if expGoal then
         table.insert(summaryLines, string.format("EXP  %s/%s", fmt(expNow), fmt(expGoal)))
@@ -2559,8 +2890,8 @@ local function renderStats()
     end
 
     for _, entry in ipairs({
-        {"Gold", "Gold"}, {"Gem", "Gemas"}, {"MonsterKills", "Monstros eliminados"},
-        {"GuildPoints", "Guild Points"}, {"AttributePoints", "Pontos disponíveis"},
+        {"Gold", "Gold"}, {"Gem", "Gems"}, {"MonsterKills", "Enemies defeated"},
+        {"GuildPoints", "Guild Points"}, {"AttributePoints", "Available points"},
     }) do
         local key, label = entry[1], entry[2]
         table.insert(summaryLines, string.format("%s  %s (%s)", label, fmt(current[key]),
@@ -2569,12 +2900,12 @@ local function renderStats()
 
     local combatLines = {}
     for _, entry in ipairs({
-        {"Damage", "Dano", "AttrDamage", ""},
-        {"Def", "Defesa", "AttrDef", ""},
-        {"Health", "Vida", "AttrHealth", ""},
-        {"Evasion", "Evasão", "AttrEvasion", ""},
-        {"CritChance", "Chance crítica", "AttrCritChance", "%"},
-        {"CritMultiplier", "Multiplicador crítico", "AttrCritMultiplier", "x"},
+        {"Damage", "Damage", "AttrDamage", ""},
+        {"Def", "Defense", "AttrDef", ""},
+        {"Health", "Health", "AttrHealth", ""},
+        {"Evasion", "Evasion", "AttrEvasion", ""},
+        {"CritChance", "Critical chance", "AttrCritChance", "%"},
+        {"CritMultiplier", "Critical multiplier", "AttrCritMultiplier", "x"},
     }) do
         local ruleName, label, key, suffix = entry[1], entry[2], entry[3], entry[4]
         local value = current[key]
@@ -2588,8 +2919,8 @@ local function renderStats()
     end
 
     pcall(function()
-        StatsSummary:Set({Title = "Resumo da sessão", Content = table.concat(summaryLines, "\n")})
-        StatsCombat:Set({Title = "Atributos de combate", Content = table.concat(combatLines, "\n\n")})
+        StatsSummary:Set({Title = "Session summary", Content = table.concat(summaryLines, "\n")})
+        StatsCombat:Set({Title = "Combat stats", Content = table.concat(combatLines, "\n\n")})
     end)
 
     local resourceLines = {}
@@ -2605,7 +2936,7 @@ local function renderStats()
     table.sort(resourceLines)
     pcall(function()
         StatsResources:Set({
-            Title = "Inventário e ganhos",
+            Title = "Inventory and gains",
             Content = #resourceLines > 0 and table.concat(resourceLines, "\n") or "—",
         })
     end)
@@ -2618,7 +2949,7 @@ local function resetStatsBaseline()
 end
 
 StatsTab:CreateButton({
-    Name = "Redefinir início da comparação",
+    Name = "Reset comparison baseline",
     Side = "Left",
     Card = "SessionSummary",
     Callback = resetStatsBaseline,
@@ -2668,6 +2999,16 @@ function Runtime.Stop()
 end
 
 pcall(function() MacLib:LoadConfig("Settings") end)
+if G.BuyMode == "Quantidade" then G.BuyMode = "Quantity" end
+if G.BuyMode == "Todos" then G.BuyMode = "All" end
+if G.BuyMode ~= "All" then G.BuyMode = "Quantity" end
+if G.LegitFarmMode == "Parado" then G.LegitFarmMode = "Stationary" end
+if G.LegitFarmMode == "Aproximar" then G.LegitFarmMode = "Approach" end
+if G.LegitFarmMode ~= "Approach" then G.LegitFarmMode = "Stationary" end
+pcall(function()
+    BuyModeDropdown:Set({G.BuyMode})
+    LegitModeDropdown:Set({G.LegitFarmMode})
+end)
 if G.LegitFarmEnabled and G.FarmEnabled then
     G.FarmEnabled = false
     pcall(function() FarmToggle:Set(false) end)
