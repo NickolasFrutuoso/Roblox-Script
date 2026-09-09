@@ -242,8 +242,11 @@ local Runtime = {
     PurchaseTotalSpent = 0,
     CraftModalGui = nil,
     DiscordWebhookUrl = "",
+    CraftWebhookUrl = "",
     DiscordWebhookBusy = false,
     DiscordWebhookLastSent = 0,
+    DiscordWebhookBusyByUrl = {},
+    DiscordWebhookLastSentByUrl = {},
     CraftWebhookMessageId = nil,
     CraftWebhookSignature = nil,
     CraftWebhookPending = false,
@@ -255,6 +258,8 @@ local Runtime = {
     StatsWebhookLastAttempt = 0,
     StatsPriorityQueued = false,
     SyncingCraftWebhook = false,
+    AvatarThumbnailUrl = nil,
+    AvatarThumbnailLastAttempt = 0,
 }
 _G.SimpleMerchantAutoBuyRuntime = Runtime
 
@@ -2119,6 +2124,7 @@ local function updateCraftWebhook(craftId, recipe, complete, completed, total, o
             complete and "✅" or "🛠️", stateText, completed, total, overall),
         {
             fields = fields,
+            webhookUrl = Runtime.CraftWebhookUrl,
             messageId = Runtime.CraftWebhookMessageId,
             footer = string.format("Overgeared Crafting · Updates every %d minute(s)",
                 math.clamp(tonumber(G.WebhookIntervalMinutes) or 30, 10, 1440)),
@@ -2570,6 +2576,43 @@ local function getHttpRequest()
         or (environment.fluxus and environment.fluxus.request)
 end
 
+local function getAvatarThumbnailUrl()
+    if type(Runtime.AvatarThumbnailUrl) == "string" and Runtime.AvatarThumbnailUrl:match("^https://") then
+        return Runtime.AvatarThumbnailUrl
+    end
+    if Runtime.AvatarThumbnailLastAttempt > 0
+        and os.clock() - Runtime.AvatarThumbnailLastAttempt < 60 then return nil end
+    Runtime.AvatarThumbnailLastAttempt = os.clock()
+
+    local endpoint = string.format(
+        "https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=%d&size=420x420&format=Png&isCircular=false",
+        LocalPlayer.UserId
+    )
+    local ok, body = pcall(function()
+        local request = getHttpRequest()
+        if type(request) == "function" then
+            local response = request({Url = endpoint, Method = "GET"})
+            if type(response) == "table" then
+                return response.Body or response.body
+            end
+        end
+        return game:HttpGet(endpoint)
+    end)
+    if not ok then return nil end
+
+    local decodedOk, decoded = pcall(function()
+        if type(body) == "table" then return body end
+        return HttpService:JSONDecode(tostring(body or ""))
+    end)
+    local entry = decodedOk and type(decoded) == "table" and type(decoded.data) == "table" and decoded.data[1]
+    local imageUrl = type(entry) == "table" and entry.imageUrl
+    if type(imageUrl) == "string" and imageUrl:match("^https://") then
+        Runtime.AvatarThumbnailUrl = imageUrl
+        return imageUrl
+    end
+    return nil
+end
+
 local function normalizeDiscordWebhook(url)
     url = tostring(url or ""):match("^%s*(.-)%s*$")
     url = url:gsub("^https://discordapp%.com/", "https://discord.com/")
@@ -2586,14 +2629,14 @@ local function validDiscordWebhook(url)
 end
 
 local DiscordWebhookStatus = StatsTab:CreateParagraph({
-    Title = "Discord Webhook",
-    Content = "Paste the URL below. It is kept only in memory for this session.",
+    Title = "Player Stats Webhook",
+    Content = "Paste the player-status webhook URL. It is kept only in memory.",
     Side = "Left",
     Card = "DiscordWebhook",
 })
 
 StatsTab:CreateInput({
-    Name = "Webhook URL",
+    Name = "Player Stats webhook URL",
     CurrentValue = "",
     PlaceholderText = "https://discord.com/api/webhooks/...",
     Side = "Left",
@@ -2607,6 +2650,30 @@ StatsTab:CreateInput({
                 and "Empty URL | nothing will be sent."
                 or (validDiscordWebhook(Runtime.DiscordWebhookUrl)
                     and "URL recognized | ready to test."
+                    or "Invalid URL | use a Discord webhook URL."),
+        })
+    end,
+})
+
+StatsTab:CreateInput({
+    Name = "Craft webhook URL",
+    CurrentValue = "",
+    PlaceholderText = "https://discord.com/api/webhooks/...",
+    Side = "Left",
+    Card = "DiscordWebhook",
+    -- No Flag: webhook credentials remain session-only.
+    Callback = function(value)
+        local previousUrl = Runtime.CraftWebhookUrl
+        Runtime.CraftWebhookUrl = normalizeDiscordWebhook(value)
+        if previousUrl ~= Runtime.CraftWebhookUrl then
+            resetCraftWebhook(G.SelectedCraft)
+        end
+        CraftWebhookStatus:Set({
+            Title = "Craft Webhook",
+            Content = Runtime.CraftWebhookUrl == ""
+                and "Empty URL | craft updates will not be sent."
+                or (validDiscordWebhook(Runtime.CraftWebhookUrl)
+                    and "URL recognized | craft tracker ready."
                     or "Invalid URL | use a Discord webhook URL."),
         })
     end,
@@ -2630,13 +2697,17 @@ sendDiscordWebhook = function(title, description, options)
     options = options or {}
     if not Runtime.Running and not options.allowWhenStopped then return false, "Script stopped." end
     if not G.DiscordWebhookEnabled then return false, "Enable notifications first." end
-    if not validDiscordWebhook(Runtime.DiscordWebhookUrl) then
-        return false, "Enter a valid Discord webhook URL."
+    local destinationUrl = normalizeDiscordWebhook(options.webhookUrl or Runtime.DiscordWebhookUrl)
+    if not validDiscordWebhook(destinationUrl) then
+        return false, options.webhookUrl ~= nil
+            and "Enter a valid Craft webhook URL."
+            or "Enter a valid Player Stats webhook URL."
     end
-    if Runtime.DiscordWebhookBusy and not options.bypassBusy then
-        return false, "A webhook request is already in progress."
+    if Runtime.DiscordWebhookBusyByUrl[destinationUrl] and not options.bypassBusy then
+        return false, "A request for this webhook is already in progress."
     end
-    if not options.bypassCooldown and os.clock() - Runtime.DiscordWebhookLastSent < 2 then
+    local destinationLastSent = Runtime.DiscordWebhookLastSentByUrl[destinationUrl] or 0
+    if not options.bypassCooldown and os.clock() - destinationLastSent < 2 then
         return false, "Wait two seconds before trying again."
     end
 
@@ -2647,7 +2718,10 @@ sendDiscordWebhook = function(title, description, options)
 
     Runtime.DiscordWebhookBusy = true
     Runtime.DiscordWebhookLastSent = os.clock()
-    local requestUrl = Runtime.DiscordWebhookUrl
+    Runtime.DiscordWebhookBusyByUrl[destinationUrl] = true
+    Runtime.DiscordWebhookLastSentByUrl[destinationUrl] = os.clock()
+    local thumbnailUrl = options.thumbnailUrl or getAvatarThumbnailUrl()
+    local requestUrl = destinationUrl
     local requestMethod = "POST"
     if options.messageId then
         requestUrl = requestUrl .. "/messages/" .. tostring(options.messageId)
@@ -2669,6 +2743,7 @@ sendDiscordWebhook = function(title, description, options)
                     author = options.authorName and {
                         name = tostring(options.authorName):sub(1, 256),
                     } or nil,
+                    thumbnail = thumbnailUrl and { url = thumbnailUrl } or nil,
                     footer = { text = tostring(options.footer or "MacUI notification") },
                 }},
             })
@@ -2680,7 +2755,8 @@ sendDiscordWebhook = function(title, description, options)
             })
         end)
 
-        Runtime.DiscordWebhookBusy = false
+        Runtime.DiscordWebhookBusyByUrl[destinationUrl] = nil
+        Runtime.DiscordWebhookBusy = next(Runtime.DiscordWebhookBusyByUrl) ~= nil
         local responseTable = type(response) == "table" and response or nil
         local statusCode = ok and tonumber(responseTable and (
             responseTable.StatusCode or responseTable.Status
